@@ -68,5 +68,13 @@ drawdown inside 25%.
 
 ## Results
 
-See `RESULTS.md` (written after the run completes — the numbers land there,
-whichever way they point).
+Full account in **[`RESULTS.md`](RESULTS.md)**. In one line: the pattern is real
+but the same size as the friction — gross expectancy **+5 to +10 bps per trade**
+against a **10 bps** round trip at 5 bps/side, so break-even sits at 1.5–5 bps
+per side and the sign is decided by execution quality, not by the signal.
+
+Not one of the 1,152 configurations produced a positive portfolio CAGR
+in-sample; the frozen config returned **−7.4% CAGR** on the 2025-2026 test
+window. A walk-forward ML sizing layer was **indistinguishable from its own
+shuffle control** in all three windows (rank IC +0.06 / −0.01 / +0.03), which is
+the second independent measurement of that same result in this repository.
