@@ -68,7 +68,7 @@ class PortfolioSpec:
     max_positions: int = 12
     max_weight: float = 0.20            # cap on any single position
     max_new_per_day: int = 6
-    allow_leverage: float = 1.0         # 1.0 == fully invested, no margin
+    gross_target: float = 1.0           # 1.0 == fully invested, no margin
 
 
 @dataclass

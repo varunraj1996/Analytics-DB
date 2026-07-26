@@ -121,7 +121,7 @@ def run_portfolio_full(ws, t: pd.DataFrame, score: np.ndarray | None = None,
         int(spec.max_positions), float(spec.max_weight),
         int(spec.max_new_per_day), float(costs.base_bps),
         float(costs.impact_coef), float(costs.min_cents_per_share),
-        float(participation), float(borrow_bps))
+        float(participation), float(borrow_bps), float(spec.gross_target))
 
     m = strategy.metrics(eq, ws.calendar, day_lo, day_hi)
     tk = taken.astype(bool)
@@ -134,6 +134,7 @@ def run_portfolio_full(ws, t: pd.DataFrame, score: np.ndarray | None = None,
         "win_rate_taken": float((pnl[tk] > 0).mean()) if tk.any() else np.nan,
         "avg_bars": float(t.loc[tk, "bars_held"].mean()) if tk.any() else np.nan,
         "trades_per_year": float(tk.sum() / max(m.get("years", 1), 1e-9)),
+        "gross_target": float(spec.gross_target),
     })
     return {"metrics": m, "equity": eq, "exposure": expo, "n_open": nopen,
             "pnl": pnl, "taken": tk, "weight": w, "trades": t}

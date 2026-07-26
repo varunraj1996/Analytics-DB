@@ -51,7 +51,8 @@ def _close_due(d, op_trade, op_shares, op_cost, op_notional, exit_day, exit_px,
 def run_portfolio(order, entry_day, exit_day, entry_px, exit_px, stop_px,
                   side_arr, addv, path_off, path_len, path_day, path_close,
                   n_days, start_equity, risk_frac, max_pos, max_w, max_new,
-                  base_bps, impact_coef, min_cps, participation, borrow_bps):
+                  base_bps, impact_coef, min_cps, participation, borrow_bps,
+                  gross_target):
     """Capital-constrained simulation over the integer trading calendar.
 
     ``order`` must already be sorted by (entry_day, -score) so that on a
@@ -117,10 +118,13 @@ def run_portfolio(order, entry_day, exit_day, entry_px, exit_px, stop_px,
             cap_liq = participation * addv[t]
             if notional > cap_liq:
                 notional = cap_liq
-            room = equity - gross_now          # no leverage beyond 1x gross
+            # gross_target == 1.0 means fully invested with no margin; above
+            # that the book is explicitly levered, which is a disclosed choice
+            # rather than an accident of the sizing rule
+            room = gross_target * equity - gross_now
             if notional > room:
                 notional = room
-            if side_arr[t] > 0 and notional > cash:
+            if side_arr[t] > 0 and gross_target <= 1.0 and notional > cash:
                 notional = cash
             if notional < 500.0:
                 p += 1

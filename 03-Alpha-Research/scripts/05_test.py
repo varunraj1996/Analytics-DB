@@ -50,10 +50,13 @@ def main():
     with open(os.path.join(config.RESULTS_DIR, "frozen_config.json")) as fh:
         frozen = json.load(fh)
     spec = config.PortfolioSpec(**frozen["portfolio"])
-    thr = frozen["threshold"]
-    print(f"[test] frozen: {len(frozen['configs'])} rules, score floor {thr:.2f}, "
+    thr = frozen["score_cut"]
+    sides = frozen["sides"]
+    rank_policy = frozen.get("rank", "model")
+    print(f"[test] frozen: {len(frozen['configs'])} rules, sides {sides}, "
+          f"keep top {frozen['keep_q']:.0%} by score (cut {thr:+.4f}), "
           f"{spec.max_positions} slots, risk {spec.risk_per_trade:.3%}/trade, "
-          f"max {spec.max_new_per_day} new/day")
+          f"gross target {spec.gross_target:.1f}x, rank by {rank_policy}")
     print(f"[test] validation said: cagr {frozen['validation']['cagr']:.1%} "
           f"sharpe {frozen['validation']['sharpe']:.2f} "
           f"dd {frozen['validation']['max_dd']:.1%}")
@@ -77,13 +80,24 @@ def main():
     models = meta.bagged_train(fit, n_models=5)
     print(f"[test] meta-model fitted on {len(fit):,} completed train trades")
 
+    def frozen_filter(w, s):
+        return (s >= thr) & X[w]["side"].isin(sides).to_numpy()
+
+    def ranking(w, s, keep):
+        """The frozen allocation policy: which candidate wins a scarce slot."""
+        if rank_policy == "liquidity":
+            return X[w]["addv"].to_numpy()[keep]
+        if rank_policy == "random":
+            return np.random.default_rng(0).random(int(keep.sum()))
+        return s[keep]
+
     results = {}
     for w, (lo, hi) in (("train", ws.train), ("valid", ws.valid), ("test", ws.test)):
         s = meta.bagged_score(models, X[w])
-        keep = s >= thr
+        keep = frozen_filter(w, s)
         sub = X[w][keep].reset_index(drop=True)
-        r = pipeline.run_portfolio_full(ws, sub, score=s[keep], spec=spec,
-                                        day_lo=lo, day_hi=hi)
+        r = pipeline.run_portfolio_full(ws, sub, score=ranking(w, s, keep),
+                                        spec=spec, day_lo=lo, day_hi=hi)
         results[w] = r
         m = r["metrics"]
         print(f"[test] {w:>5}: cagr {m['cagr']:7.2%}  sharpe {m['sharpe']:5.2f}  "
@@ -120,9 +134,35 @@ def main():
     print("ROBUSTNESS (all on the test window, frozen strategy)")
     print("=" * 78)
     s_te = meta.bagged_score(models, X["test"])
-    keep = s_te >= thr
+    keep = frozen_filter("test", s_te)
     sub = X["test"][keep].reset_index(drop=True)
-    sub_s = s_te[keep]
+    sub_s = ranking("test", s_te, keep)
+
+    print("\n-- does the meta-model ranking actually earn its place?")
+    rng = np.random.default_rng(0)
+    for label, sc in ((f"frozen policy ({rank_policy})", sub_s),
+                      ("meta-model score", s_te[keep]),
+                      ("random order", rng.random(len(sub))),
+                      ("most liquid first", sub["addv"].to_numpy()),
+                      ("alphabetical (no score)", None)):
+        r = pipeline.run_portfolio_full(ws, sub, score=sc, spec=spec,
+                                        day_lo=te_lo, day_hi=te_hi)
+        m = r["metrics"]
+        tk = r["trades"][r["taken"]]
+        print(f"   {label:<24} cagr {m['cagr']:7.2%}  sharpe {m['sharpe']:5.2f}  "
+              f"dd {m['max_dd']:7.2%}  bps/trade {tk['ret'].mean() * 1e4:6.1f}")
+
+    print("\n-- gross exposure target (the levered variant is a disclosed choice)")
+    for gross in (1.0, 1.5, 2.0):
+        sp = config.PortfolioSpec(
+            max_positions=spec.max_positions, risk_per_trade=spec.risk_per_trade,
+            max_new_per_day=spec.max_new_per_day, gross_target=gross,
+            max_weight=min(0.20, 4.0 * gross / spec.max_positions))
+        r = pipeline.run_portfolio_full(ws, sub, score=sub_s, spec=sp,
+                                        day_lo=te_lo, day_hi=te_hi)
+        m = r["metrics"]
+        print(f"   gross {gross:.1f}x: cagr {m['cagr']:7.2%}  sharpe {m['sharpe']:5.2f}  "
+              f"dd {m['max_dd']:7.2%}  expo {m['avg_exposure']:.2f}")
 
     print("\n-- transaction cost sensitivity")
     for mult in (1, 2, 4, 8):
