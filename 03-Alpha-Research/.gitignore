@@ -1,0 +1,5 @@
+# research artefacts live in scratch, never in the repo
+__pycache__/
+*.pyc
+results/
+data/
