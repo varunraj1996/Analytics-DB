@@ -4,22 +4,24 @@ The rule, stated once in plain language:
 
     A name that has been building a base for `base_len` sessions closes above
     the top of that base on expanding volume, in an uptrend, in a market that
-    is itself in an uptrend.  We do **not** chase the breakout.  Instead a
-    limit order is rested `pullback_atr` ATRs below the breakout close and left
-    working for the next `entry_window` sessions.  If the market comes back to
-    us intraday we are long; if it never does, we skip the trade entirely.
-    Risk is a fixed ATR distance, reward a fixed ATR distance, with a time stop.
+    is itself in an uptrend.  We do **not** chase the breakout.  We wait for
+    price to trade back down through a level `pullback_atr` ATRs below the
+    breakout close, at any point in the next `entry_window` sessions.  On the
+    session where that pullback happens we buy at the close.  Risk is a fixed
+    ATR distance, reward a fixed ATR distance, with a time stop.
 
 The short side is the exact mirror (breakdown, rally into resistance).
+
+The pullback level is a *trigger*, not a fill price.  Filling at the level
+itself would mean claiming a price whose position within the bar is unknowable,
+and doing so inflated the measured edge enough to make the validation window
+outperform the train window.  ``scripts/04c_decompose.py`` shows the arithmetic.
 """
 from __future__ import annotations
-
-from dataclasses import replace
 
 import numpy as np
 import pandas as pd
 
-from . import config, engine
 from .config import StrategyParams, UniverseSpec
 
 TRADING_DAYS = 252
@@ -94,64 +96,6 @@ def setup_mask(P, F, p: StrategyParams, uni: UniverseSpec,
 
 
 # ---------------------------------------------------------------------------
-def generate_trades(P, F, p: StrategyParams, uni: UniverseSpec,
-                    regime_ok: np.ndarray | None,
-                    day_lo: int = 0, day_hi: int = 10 ** 9,
-                    member: np.ndarray | None = None) -> pd.DataFrame:
-    """Run the rule and return one row per trade, with features attached."""
-    mask = setup_mask(P, F, p, uni, regime_ok, member)
-    mask &= (P.day >= day_lo) & (P.day <= day_hi)
-    if not mask.any():
-        return pd.DataFrame()
-
-    atr = F["atr14"] if p.atr_len == 14 else F["atr20"]
-    max_paths = int(mask.sum()) * (p.max_hold + 2) + 16
-
-    (sig, ent, ext, epx, xpx, stop, tgt, atr_v, reason, mae, mfe,
-     poff, plen, prow) = engine.simulate_trades(
-        mask, P.open, P.high, P.low, P.close, atr, P.starts, P.ends,
-        np.int64(p.side), float(p.pullback_atr), np.int64(p.entry_window),
-        float(p.stop_atr), float(p.target_atr), np.int64(p.max_hold),
-        float(p.trail_atr), np.int64(max_paths))
-
-    if len(sig) == 0:
-        return pd.DataFrame()
-
-    t = pd.DataFrame({
-        "sym": P.sym_id[sig],
-        "ticker": P.symbols[P.sym_id[sig]],
-        "sig_row": sig,
-        "entry_row": ent,
-        "exit_row": ext,
-        "sig_day": P.day[sig],
-        "entry_day": P.day[ent],
-        "exit_day": P.day[ext],
-        "sig_date": P.dates[sig],
-        "entry_date": P.dates[ent],
-        "entry_px": epx,
-        "exit_px": xpx,
-        "stop_px": stop,
-        "target_px": tgt,
-        "atr": atr_v,
-        "reason": reason,
-        "mae_r": mae,
-        "mfe_r": mfe,
-        "path_off": poff,
-        "path_len": plen,
-        "side": p.side,
-    })
-    t["bars_held"] = t["exit_row"] - t["entry_row"] + 1
-    t["wait"] = t["entry_row"] - t["sig_row"]
-    t["addv"] = F["addv21"][sig]
-    # gross return and return in units of initial risk (R)
-    t["ret"] = p.side * (t["exit_px"] / t["entry_px"] - 1.0)
-    risk = (t["entry_px"] - t["stop_px"]).abs()
-    t["r_mult"] = p.side * (t["exit_px"] - t["entry_px"]) / risk.replace(0, np.nan)
-
-    t.attrs["path_row"] = prow
-    return t
-
-
 def attach_features(t: pd.DataFrame, P, F) -> pd.DataFrame:
     """Snapshot of everything known at the close of the signal day."""
     i = t["sig_row"].to_numpy()
@@ -190,65 +134,6 @@ FEATURE_COLS = [
     "f_daygain", "f_barrange", "f_base20", "f_base40", "f_base60",
     "f_logaddv", "f_logpx", "f_age", "f_wait", "f_gap", "f_pull_depth",
 ]
-
-
-# ---------------------------------------------------------------------------
-def portfolio_from_trades(t: pd.DataFrame, P, calendar_len: int,
-                          score: np.ndarray | None = None,
-                          spec=None, costs=None,
-                          day_lo: int = 0, day_hi: int | None = None,
-                          participation: float = 0.01,
-                          borrow_bps: float = 2.0):
-    spec = spec or config.DEFAULT_PORTFOLIO
-    costs = costs or config.DEFAULT_COSTS
-    if len(t) == 0:
-        return None
-
-    day_hi = calendar_len - 1 if day_hi is None else day_hi
-    sel = (t["entry_day"] >= day_lo) & (t["exit_day"] <= day_hi)
-    t = t[sel].reset_index(drop=True)
-    if len(t) == 0:
-        return None
-    if score is not None:
-        score = np.asarray(score)[sel.to_numpy()]
-    else:
-        score = np.zeros(len(t))
-
-    prow = t.attrs.get("path_row")
-    if prow is None:
-        raise ValueError("trade frame is missing its path index")
-    # re-pack the path arrays for the surviving subset
-    offs = t["path_off"].to_numpy()
-    lens = t["path_len"].to_numpy()
-    new_off = np.zeros(len(t), np.int64)
-    tot = int(lens.sum())
-    pday = np.empty(tot, np.int32)
-    pclose = np.empty(tot, np.float64)
-    q = 0
-    for k in range(len(t)):
-        rows = prow[offs[k]:offs[k] + lens[k]]
-        new_off[k] = q
-        pday[q:q + lens[k]] = P.day[rows]
-        pclose[q:q + lens[k]] = P.close[rows]
-        q += lens[k]
-
-    order = np.lexsort((-score, t["entry_day"].to_numpy())).astype(np.int64)
-
-    eq, expo, nopen, pnl, taken, w = engine.run_portfolio(
-        order,
-        t["entry_day"].to_numpy().astype(np.int64),
-        t["exit_day"].to_numpy().astype(np.int64),
-        t["entry_px"].to_numpy(), t["exit_px"].to_numpy(),
-        t["stop_px"].to_numpy(), t["side"].to_numpy().astype(np.float64),
-        t["addv"].to_numpy(), new_off, lens.astype(np.int32), pday, pclose,
-        calendar_len, float(spec.starting_equity), float(spec.risk_per_trade),
-        int(spec.max_positions), float(spec.max_weight), int(spec.max_new_per_day),
-        float(costs.base_bps), float(costs.impact_coef),
-        float(costs.min_cents_per_share), float(participation), float(borrow_bps))
-
-    return {"equity": eq, "exposure": expo, "n_open": nopen,
-            "trade_pnl": pnl, "taken": taken.astype(bool), "weight": w,
-            "trades": t}
 
 
 # ---------------------------------------------------------------------------

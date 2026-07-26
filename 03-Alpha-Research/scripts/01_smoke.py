@@ -6,9 +6,7 @@ import time
 
 sys.path.insert(0, "/home/user/Analytics-DB/03-Alpha-Research")
 
-import numpy as np
-
-from alpha import config, strategy, workspace
+from alpha import config, pipeline, search, strategy, workspace
 
 ws = workspace.load(rebuild="--rebuild" in sys.argv)
 P, F = ws.P, ws.F
@@ -22,23 +20,21 @@ p = config.StrategyParams()
 uni = config.DEFAULT_UNIVERSE
 
 t0 = time.time()
-mask = strategy.setup_mask(P, F, p, uni, ws.regime[p.regime_ma])
-print(f"[smoke] setups in panel: {mask.sum():,}   ({time.time() - t0:.1f}s)")
+E = search.Eligible(P, F, uni, ws.member, lo, hi)
+sig = search.mask_rows(E, p, ws.regime[p.regime_ma])
+print(f"[smoke] eligible rows {len(E):,}  setups {len(sig):,}  "
+      f"({time.time() - t0:.1f}s)")
 
 t0 = time.time()
-tr = strategy.generate_trades(P, F, p, uni, ws.regime[p.regime_ma], lo, hi)
-print(f"[smoke] trades generated: {len(tr):,}   ({time.time() - t0:.1f}s)")
-print(f"[smoke] fill rate: {len(tr) / max(int((mask & (P.day >= lo) & (P.day <= hi)).sum()), 1):.1%}")
+tr = pipeline.build_trades(ws, p, uni, lo, hi, E)
+print(f"[smoke] trades: {len(tr):,}  ({time.time() - t0:.1f}s)  "
+      f"trigger rate {len(tr) / max(len(sig), 1):.1%}")
 
-st = strategy.trade_stats(tr)
-for k, v in st.items():
+for k, v in strategy.trade_stats(tr).items():
     print(f"[smoke]   {k:>14}: {v:,.4f}")
 
 t0 = time.time()
-res = strategy.portfolio_from_trades(tr, P, ws.n_days, day_lo=lo, day_hi=hi)
+res = pipeline.run_portfolio_full(ws, tr, day_lo=lo, day_hi=hi)
 print(f"[smoke] portfolio ({time.time() - t0:.1f}s)")
-m = strategy.metrics(res["equity"], ws.calendar, lo, hi)
-for k, v in m.items():
-    print(f"[smoke]   {k:>14}: {v:,.4f}")
-print(f"[smoke]   taken {res['taken'].sum():,} / {len(tr):,} "
-      f"({res['taken'].mean():.1%})  avg exposure {res['exposure'][lo:hi].mean():.2f}")
+for k, v in res["metrics"].items():
+    print(f"[smoke]   {k:>16}: {v:,.4f}")

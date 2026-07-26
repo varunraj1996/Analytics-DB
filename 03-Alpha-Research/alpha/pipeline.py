@@ -38,7 +38,8 @@ def _build_paths(entry_row, exit_row, day, close):
 
 
 def build_trades(ws, p: config.StrategyParams, uni: config.UniverseSpec,
-                 day_lo: int, day_hi: int, E=None) -> pd.DataFrame:
+                 day_lo: int, day_hi: int, E=None,
+                 entry_bar_mode: int = 2) -> pd.DataFrame:
     """Every trade the rule would have taken between two calendar days."""
     P, F = ws.P, ws.F
     E = E or search.Eligible(P, F, uni, ws.member, day_lo, day_hi)
@@ -58,9 +59,12 @@ def build_trades(ws, p: config.StrategyParams, uni: config.UniverseSpec,
     x_row, x_px, x_reason, x_mae, x_mfe, keep = search.eval_exits(
         f_sig, f_row, f_px, f_atr, block_end[f_sig], P.open, P.high, P.low,
         P.close, np.int64(p.side), float(p.stop_atr), float(p.target_atr),
-        np.int64(p.max_hold), float(p.trail_atr))
+        np.int64(p.max_hold), float(p.trail_atr), np.int64(entry_bar_mode))
 
     k = keep.astype(bool)
+    # mode 2 executes market-on-close on the trigger bar, so the price paid is
+    # that bar's close rather than the resting limit
+    entry_px = P.close[f_row[k]] if entry_bar_mode == 2 else f_px[k]
     t = pd.DataFrame({
         "sym": P.sym_id[f_sig[k]],
         "ticker": P.symbols[P.sym_id[f_sig[k]]],
@@ -68,7 +72,7 @@ def build_trades(ws, p: config.StrategyParams, uni: config.UniverseSpec,
         "sig_day": P.day[f_sig[k]], "entry_day": P.day[f_row[k]],
         "exit_day": P.day[x_row[k]],
         "sig_date": P.dates[f_sig[k]], "entry_date": P.dates[f_row[k]],
-        "entry_px": f_px[k], "exit_px": x_px[k], "atr": f_atr[k],
+        "entry_px": entry_px, "exit_px": x_px[k], "atr": f_atr[k],
         "reason": x_reason[k], "mae_r": x_mae[k], "mfe_r": x_mfe[k],
         "side": p.side,
     })

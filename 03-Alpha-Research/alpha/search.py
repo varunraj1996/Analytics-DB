@@ -147,9 +147,31 @@ def find_fills(sig_rows, block_end, open_, high, low, close, atr,
 # ---------------------------------------------------------------------------
 @njit(cache=True)
 def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
-               side, stop_atr, target_atr, max_hold, trail_atr):
+               side, stop_atr, target_atr, max_hold, trail_atr,
+               entry_bar_mode=1):
     """Resolve every fill.  ``keep`` marks the ones an actually-sequential
-    trader could have taken (no overlapping position in the same symbol)."""
+    trader could have taken (no overlapping position in the same symbol).
+
+    ``entry_bar_mode`` decides how the entry bar is treated, which matters more
+    than it looks.  The bar's open always precedes our fill, so it is never a
+    valid exit price.  The bar's *high* is ambiguous - it may have printed
+    before the pullback reached our limit:
+
+    ``0`` (stop only)
+        Assume the high came first, so no target exit on the entry bar.  Bar-wise
+        this is the adverse assumption, but it lets a winner run past the target
+        and exit at the next bar's open, which flatters the result.
+    ``1`` (capped)
+        If the target is inside the entry bar's range, book it at the target.
+        Measured against mode 0 this is *wildly* optimistic - the entry bar's
+        high is usually what printed before the pullback reached the limit, so
+        this hands the strategy a winner it never earned.
+    ``2`` (execute at the close of the trigger day - the default)
+        The intraday pullback is only used as the *trigger*.  Execution happens
+        at that day's close, an observable price, and exits are evaluated from
+        the next bar onward.  Nothing in the trade depends on the unknowable
+        ordering of prices inside a bar.  This is what the reported numbers use.
+    """
     n = len(f_sig)
     x_row = np.empty(n, np.int64)
     x_px = np.empty(n, np.float64)
@@ -168,9 +190,12 @@ def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
             last_sym_end = b
             last_exit = -1
 
-        epx = f_px[q]
         A = f_atr[q]
         j = f_row[q]
+        # mode 2 executes on the close of the trigger bar, so the position only
+        # exists from the next session onward
+        epx = close[j] if entry_bar_mode == 2 else f_px[q]
+        k0 = j + 1 if entry_bar_mode == 2 else j
 
         stop = epx - side * stop_atr * A
         tgt = epx + side * target_atr * A
@@ -181,10 +206,12 @@ def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
         mae = 0.0
         mfe = 0.0
 
+        # the holding window is always measured from the trigger bar, so that
+        # max_hold means the same number of sessions in every execution mode
         kmax = j + max_hold + 1
         if kmax > b:
             kmax = b
-        for k in range(j, kmax):
+        for k in range(k0, kmax):
             if trail_atr > 0.0 and k > j:
                 c1 = close[k - 1]
                 if side > 0:
@@ -200,12 +227,11 @@ def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
                     if ts < stop:
                         stop = ts
 
-            # On the entry bar the favourable extreme may well have printed
-            # *before* the pullback filled us - the whole point of the setup is
-            # that price came down to the limit.  Crediting that high would be
-            # look-ahead, so the entry bar can only ever hurt us: the stop is
-            # live, the target is not.
-            first_bar = (k == j)
+            first_bar = (k == j) and (entry_bar_mode != 2)
+            # the open always precedes the fill, so it is never an exit price
+            # on the entry bar; the target is allowed only in capped mode
+            allow_open = not first_bar
+            allow_tgt = (not first_bar) or (entry_bar_mode == 1)
 
             if side > 0:
                 eb = (low[k] - epx) / A
@@ -220,22 +246,22 @@ def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
 
             o = open_[k]
             if side > 0:
-                if not first_bar and o <= stop:
+                if allow_open and o <= stop:
                     xpx = o; exit_k = k; reason = 1; break
-                if not first_bar and o >= tgt:
+                if allow_open and o >= tgt:
                     xpx = o; exit_k = k; reason = 2; break
                 if low[k] <= stop:
                     xpx = stop; exit_k = k; reason = 1; break
-                if not first_bar and high[k] >= tgt:
+                if allow_tgt and high[k] >= tgt:
                     xpx = tgt; exit_k = k; reason = 2; break
             else:
-                if not first_bar and o >= stop:
+                if allow_open and o >= stop:
                     xpx = o; exit_k = k; reason = 1; break
-                if not first_bar and o <= tgt:
+                if allow_open and o <= tgt:
                     xpx = o; exit_k = k; reason = 2; break
                 if high[k] >= stop:
                     xpx = stop; exit_k = k; reason = 1; break
-                if not first_bar and low[k] <= tgt:
+                if allow_tgt and low[k] <= tgt:
                     xpx = tgt; exit_k = k; reason = 2; break
 
         if exit_k < 0:
@@ -245,6 +271,10 @@ def eval_exits(f_sig, f_row, f_px, f_atr, f_blockend, open_, high, low, close,
                 reason = 4
             xpx = close[kk]
             exit_k = kk
+        if exit_k < k0:          # mode 2 with no room left in the symbol block
+            exit_k = k0 if k0 < b else b - 1
+            xpx = close[exit_k]
+            reason = 4
 
         x_row[q] = exit_k
         x_px[q] = xpx

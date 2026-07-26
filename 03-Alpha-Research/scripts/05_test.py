@@ -142,6 +142,19 @@ def main():
         print(f"   {part:.3%} of ADDV: cagr {m['cagr']:7.2%}  sharpe {m['sharpe']:5.2f}  "
               f"final ${m['final_equity']:,.0f}")
 
+    print("\n-- capacity: the same strategy run at larger AUM")
+    for aum in (1e6, 1e7, 5e7, 2e8, 1e9):
+        sp = config.PortfolioSpec(
+            starting_equity=aum, max_positions=spec.max_positions,
+            risk_per_trade=spec.risk_per_trade,
+            max_new_per_day=spec.max_new_per_day, max_weight=spec.max_weight)
+        r = pipeline.run_portfolio_full(ws, sub, score=sub_s, spec=sp,
+                                        day_lo=te_lo, day_hi=te_hi)
+        m = r["metrics"]
+        print(f"   ${aum / 1e6:>7,.0f}m: cagr {m['cagr']:7.2%}  "
+              f"sharpe {m['sharpe']:5.2f}  expo {m['avg_exposure']:.2f}  "
+              f"taken {m['n_taken']:,}")
+
     print("\n-- how much rides on the best trades")
     pnl = results["test"]["pnl"][results["test"]["taken"]]
     pnl = np.sort(pnl)[::-1]
@@ -185,8 +198,9 @@ def main():
         json.dump({w: {k: (float(v) if isinstance(v, (int, float, np.floating)) else v)
                        for k, v in results[w]["metrics"].items()}
                    for w in results}, fh, indent=2)
-    np.save(os.path.join(config.RESULTS_DIR, "equity_test.npy"),
-            results["test"]["equity"])
+    for w in results:
+        np.save(os.path.join(config.RESULTS_DIR, f"equity_{w}.npy"),
+                results[w]["equity"])
     for w in results:
         results[w]["trades"].to_parquet(
             os.path.join(config.RESULTS_DIR, f"trades_{w}.parquet"), index=False)

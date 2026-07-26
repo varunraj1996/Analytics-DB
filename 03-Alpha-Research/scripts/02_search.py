@@ -45,6 +45,13 @@ EXIT_GRID = dict(
 MIN_TRADES = 300
 TOP_PER_MASK = 40
 
+# Execution model: the intraday pullback is the trigger, the fill is that day's
+# close.  Filling at the resting limit instead (mode 0/1) lets the backtest use
+# intra-bar prices whose ordering is unknowable, and it showed: under mode 0
+# the *validation* window beat the train window, which is not something a real
+# edge does.  See scripts/04c_decompose.py.
+ENTRY_BAR_MODE = 2
+
 _G: dict = {}
 
 
@@ -88,17 +95,20 @@ def evaluate_mask(mc: dict) -> list[dict]:
         entry_day = P.day[f_row].astype(np.int64)
         addv = ws.F["addv21"][f_sig]
 
+        fill_px = P.close[f_row] if ENTRY_BAR_MODE == 2 else f_px
+
         for xc in _combos(EXIT_GRID):
             x_row, x_px, x_reason, x_mae, x_mfe, keep = search.eval_exits(
                 f_sig, f_row, f_px, f_atr, f_be, P.open, P.high, P.low, P.close,
                 np.int64(p.side), float(xc["stop_atr"]), float(xc["target_atr"]),
-                np.int64(xc["max_hold"]), float(xc["trail_atr"]))
+                np.int64(xc["max_hold"]), float(xc["trail_atr"]),
+                np.int64(ENTRY_BAR_MODE))
             k = keep.astype(bool)
             n = int(k.sum())
             if n < MIN_TRADES:
                 continue
 
-            epx = f_px[k]
+            epx = fill_px[k]
             xpx = x_px[k]
             atr_k = f_atr[k]
             stop_px = epx - p.side * xc["stop_atr"] * atr_k
