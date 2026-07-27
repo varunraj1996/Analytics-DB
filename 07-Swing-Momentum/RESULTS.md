@@ -138,3 +138,47 @@ working as a mechanical daily system.
 ```bash
 python3 scripts/40_scout.py     # raw setup edge, parameter sensitivity
 ```
+
+---
+
+# Addendum — Qullamaggie v2: the nuances, priced one by one
+
+Pushback taken seriously: the first pass tested a breakout-chase he does not
+trade. v2 implements his actual bread-and-butter — **pullback to a rising
+10/20dma on drying volume after a 30%+ leg, buy the first strength day, stop
+at its low** — plus the three layers he is explicit about: top-decile relative
+strength, sector rotation (correlation-cluster leadership, recomputed causally
+each year), and the trend/chop regime gate sized 0×/1×/2×.
+
+**Each nuance bought something real.** Excess return over the same-day
+universe, 10-day horizon, train window:
+
+| layer | excess/10d | t |
+|---|---|---|
+| naive breakout-chase (first pass) | **−85.5 bps** | −11.5 |
+| pullback-bounce entry alone | **+17.9 bps** | 1.0 |
+| + RS top decile | **+76.6 bps** | 2.8 |
+| + sector leadership | +90.6 bps | 2.0 |
+
+The entry style alone is worth ~103 bps/10d of drift versus chasing — the
+single biggest effect found in this entire directory. RS adds ~59 more.
+
+**And yet it does not survive.** Validation (2010–13): the sector layer flips
+to −126 bps (t=−2.3); RS adds nothing; test-window excess for every layer is
+−32 to +24 bps, all |t| < 1.2. The full portfolio (1% risk × regime tier, 10
+slots, 15 bps/side) loses in every window, gate on or off — with ~2.5×
+turnover per trade, costs of 40–75 bps/trade sit on top of a gross edge of
++10–30 bps. The regime gate did exactly what he says it does — halved the
+drawdown versus no gate in test (−70% vs −77%) — but a smaller loss is still
+a loss.
+
+**Where this leaves the claim.** Across three independent implementations
+(daily chase, intraday ORH at 10-min, daily pullback with RS/sector/regime),
+the same number keeps appearing: the pattern's gross edge is 0–30 bps against
+20–75 bps of realistic friction. The nuances are real — they moved the drift
+by over 100 bps — but on THIS data (survivorship-biased, ending 2017, daily
+bars) they close most of the gap and not all of it. What would genuinely
+change the verdict, in order: a fresh universe through 2026 including
+delistings; true intraday entries (his ORH is a 1/5/60-minute decision);
+earnings dates for real episodic pivots. The machinery is built and tested —
+it is the data that is binding.

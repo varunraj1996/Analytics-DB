@@ -154,7 +154,7 @@ def simulate(sig_rows, block_end, open_, high, low, close, ma_trail, adr_frac,
 @njit(cache=True)
 def portfolio(order, entry_day, exit_day, epx, risk_ps, pnl_ps, turn_ps,
               n_days, start_equity, risk_frac, max_pos, max_weight,
-              max_new_per_day, cost_bps):
+              max_new_per_day, cost_bps, risk_mult):
     equity = start_equity
     eq = np.empty(n_days, np.float64)
     pending = np.zeros(n_days + 4, np.float64)
@@ -193,7 +193,11 @@ def portfolio(order, entry_day, exit_day, epx, risk_ps, pnl_ps, turn_ps,
             if slot < 0:
                 break
 
-            shares = risk_frac * equity / risk_ps[t]
+            rm = risk_mult[t]
+            if rm <= 0.0:
+                p += 1
+                continue
+            shares = risk_frac * rm * equity / risk_ps[t]
             notional = shares * epx[t]
             cap = max_weight * equity
             if notional > cap:
