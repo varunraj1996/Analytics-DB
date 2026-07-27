@@ -37,6 +37,20 @@ import time
 import urllib.request
 
 CG = "https://api.coingecko.com/api/v3/coins/{id}/market_chart"
+CB = "https://api.exchange.coinbase.com/products/{pid}/candles"
+
+# Coinbase Exchange is the primary source: no API key, generous rate limits,
+# and genuine OHLCV. CoinGecko's public tier now answers 401 to the
+# market_chart call with interval=daily (a paid parameter) and 429 well
+# inside its documented rate limit, which is what the first CI run hit.
+PRODUCTS = {
+    "sol": "SOL-USD", "avax": "AVAX-USD", "near": "NEAR-USD",
+    "apt": "APT-USD", "sui": "SUI-USD", "arb": "ARB-USD", "op": "OP-USD",
+    "shib": "SHIB-USD", "pepe": "PEPE-USD", "hbar": "HBAR-USD",
+    "vet": "VET-USD", "inj": "INJ-USD", "sei": "SEI-USD", "tia": "TIA-USD",
+    "grt": "GRT-USD", "rndr": "RENDER-USD", "atom": "ATOM-USD",
+    "fil": "FIL-USD", "jup": "JUP-USD", "wif": "WIF-USD", "bonk": "BONK-USD",
+}
 
 # CoinGecko ids for the assets the audit found missing. Everything the
 # current panel already covers is deliberately omitted.
@@ -67,6 +81,45 @@ def fetch_json(url: str, tries: int = 4):
                 return None
             time.sleep(2 ** (i + 1))
     return None
+
+
+def fetch_coinbase(sym: str, product: str, out_dir: str,
+                   pause: float = 0.35) -> bool:
+    """Daily OHLCV from Coinbase Exchange, paged backwards 300 candles at a
+    time until the listing date. Volume is quoted in the base asset, so it is
+    multiplied by the close to match the USD convention of the Coin Metrics
+    ``volume_reported_spot_usd_1d`` column the ingest expects.
+    """
+    day, page = 86400, 300
+    end = int(time.time())
+    rows: dict[str, tuple] = {}
+    while True:
+        start = end - day * page
+        url = (f"{CB.format(pid=product)}?granularity={day}"
+               f"&start={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(start))}"
+               f"&end={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(end))}")
+        batch = fetch_json(url, tries=3)
+        if not batch:
+            break
+        for t, lo, hi, op, cl, vol in batch:
+            rows[time.strftime("%Y-%m-%d", time.gmtime(t))] = (cl, vol * cl)
+        if len(batch) < page // 2:        # reached the listing date
+            break
+        end = start
+        time.sleep(pause)
+
+    if len(rows) < 400:
+        print(f"    only {len(rows)} days from Coinbase, skipping")
+        return False
+    path = os.path.join(out_dir, f"{sym}.csv")
+    with open(path, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["time", "PriceUSD", "volume_reported_spot_usd_1d"])
+        for dt, (close, usd_vol) in sorted(rows.items()):
+            w.writerow([dt, close, usd_vol])
+    first, last = min(rows), max(rows)
+    print(f"    {len(rows)} days {first} -> {last} -> {path}")
+    return True
 
 
 def fetch_coin(sym: str, coin_id: str, out_dir: str) -> bool:
@@ -136,15 +189,23 @@ def main() -> None:
     os.makedirs(args.out, exist_ok=True)
 
     if not args.skip_crypto:
-        want = {k: v for k, v in COINS.items()
-                if not args.only or k in set(args.only)}
+        want = sorted({k for k in (set(COINS) | set(PRODUCTS))
+                       if not args.only or k in set(args.only)})
         print(f"fetching {len(want)} crypto assets into {args.out}")
         ok = 0
-        for sym, cid in want.items():
-            print(f"  {sym.upper()} ({cid})")
-            ok += bool(fetch_coin(sym, cid, args.out))
-            time.sleep(args.sleep)
+        for sym in want:
+            print(f"  {sym.upper()}")
+            got = False
+            if sym in PRODUCTS:                      # Coinbase first: no key
+                got = fetch_coinbase(sym, PRODUCTS[sym], args.out)
+            if not got and sym in COINS:             # CoinGecko as fallback
+                got = fetch_coin(sym, COINS[sym], args.out)
+                time.sleep(args.sleep)
+            ok += bool(got)
         print(f"\n{ok}/{len(want)} crypto assets written")
+        if ok == 0:
+            # the first CI run reported success on zero files; never again
+            raise SystemExit("FATAL: no crypto assets fetched — see errors above")
 
     if args.equities:
         print(f"\nfetching {len(EQUITIES)} equities")
