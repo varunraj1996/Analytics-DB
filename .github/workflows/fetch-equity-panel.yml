@@ -90,16 +90,25 @@ jobs:
           panel = pd.concat(frames, ignore_index=True)
           for c in ("open", "high", "low", "close"):
               panel[c] = panel[c].astype("float32")
-          panel["volume"] = panel["volume"].astype("float64")
+          panel["volume"] = panel["volume"].astype("float32")
           panel["ticker"] = panel["ticker"].astype("category")
           os.makedirs("market-data/equity-panel", exist_ok=True)
-          out = "market-data/equity-panel/fnspid_daily.parquet"
-          panel.to_parquet(out, compression="zstd", index=False)
-          mb = os.path.getsize(out) / 1e6
-          print(f"wrote {out}: {len(panel):,} rows, {kept} tickers, "
-                f"{panel.date.min().date()} -> {panel.date.max().date()}, {mb:.0f} MB")
-          if mb > 95:
-              sys.exit(f"FATAL: {mb:.0f} MB exceeds the git file limit")
+
+          # A single file came to 99 MB, over GitHub's 100 MB blob limit, so
+          # the panel is partitioned by year: every part stays small, and the
+          # loader can read a subset of years without pulling the whole panel.
+          total = 0.0
+          for yr, part in panel.groupby(panel["date"].dt.year):
+              out = f"market-data/equity-panel/fnspid_{yr}.parquet"
+              part.to_parquet(out, compression="zstd", index=False)
+              mb = os.path.getsize(out) / 1e6
+              total += mb
+              if mb > 90:
+                  sys.exit(f"FATAL: {out} is {mb:.0f} MB, over the git limit")
+          print(f"wrote {panel.date.dt.year.nunique()} yearly parts, "
+                f"{len(panel):,} rows, {kept} tickers, "
+                f"{panel.date.min().date()} -> {panel.date.max().date()}, "
+                f"{total:.0f} MB total")
           PY
 
       - name: Commit the panel
