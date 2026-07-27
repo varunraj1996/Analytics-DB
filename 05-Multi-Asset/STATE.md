@@ -51,11 +51,11 @@ pre-declared rule; ONE test run of the frozen configuration.
       (2/8..64/256), Donchian breakout (20..320), annualised carry, skew;
       risk-parity sizing, vol targeting, cost model. Synthetic-data tests for
       the P&L accounting (negative adjusted prices, cost charging, vol target).
-- [ ] 5. `scripts/20_sweep.py`: brute-force signal weightings/speeds on TRAIN
+- [x] 5. `scripts/20_sweep.py`: brute-force signal weightings/speeds on TRAIN
       only (grid over speed subsets x carry weight x breakout weight x vol
       target x asset-class inclusion). Rank by train Sharpe with a family-
       stability preference, shortlist ~30.
-- [ ] 6. `scripts/21_validate.py`: run shortlist on VALIDATION; pre-declared
+- [x] 6. `scripts/21_validate.py`: run shortlist on VALIDATION; pre-declared
       selection = highest validation Sharpe among configs whose validation DD
       is within 1.5x train DD and whose train Sharpe >= 0.5. Freeze.
 - [ ] 7. `scripts/22_test.py`: single frozen run on TEST (2017-2024-03).
@@ -66,9 +66,10 @@ pre-declared rule; ONE test run of the frozen configuration.
 
 ## Current status
 
-Step 4 done: signals (EWMAC x6, breakout x5, carry, skew; causal expanding
-scaling, cap +/-2), portfolio (currency-space P&L, class-equal risk weights,
-fixed IDM, buffered rebalancing, per-instrument half-spread costs); 6
-synthetic-data accounting tests pass (P&L identity, negative adjusted prices,
-exact cost charging, buffer turnover, vol-target range, sign). Working step 5
-(train sweep).
+Steps 5-6 done. Sweep: 336 configs, ALL positive train Sharpe (0.94-1.79,
+median 1.39) - trend's pre-2010 golden age. Validation (2010-2016, trend's
+hard decade): best ~1.2 Sharpe; family table monotone (carry weight up ->
+better; breakout > none; no_equity best class set). FROZEN by pre-declared
+rule: none|all4|c0.4|s0.1|no_equity (breakout 40/80/160/320 at 50% + carry
+40% + skew 10%, equities excluded), train Sharpe 1.54 / CAGR 30.5%, valid
+Sharpe 1.27 / CAGR 23.3% / DD -18.9%. Working step 7 (single frozen test).
