@@ -44,7 +44,7 @@ pre-declared rule; ONE test run of the frozen configuration.
 
 - [x] 1. Probe data sources; clone pysystemtrade + inventory snowguru D1
 - [x] 2. Create hourly continuation Routine; write this STATE.md
-- [ ] 3. `multiasset/ingest.py`: futures panel (price, carry, USD conversion,
+- [x] 3. `multiasset/ingest.py`: futures panel (price, carry, USD conversion,
       asset class, point size, spread cost) + snowguru D1 panel. Quality
       report: instruments, spans, gaps.
 - [ ] 4. `multiasset/signals.py` + `multiasset/portfolio.py`: EWMAC
@@ -66,4 +66,7 @@ pre-declared rule; ONE test run of the frozen configuration.
 
 ## Current status
 
-Working step 3. Nothing else in flight.
+Step 3 done: futures panel = 157 instruments / 8 asset classes / 1,014,407
+rows / 1969-12 -> 2024-03 (dropped: unknown-cost, <8y history, micro/mini
+duplicates). sg cross-check panel = 42 instruments / 143,845 rows. Working
+step 4 (signals + portfolio + tests).
