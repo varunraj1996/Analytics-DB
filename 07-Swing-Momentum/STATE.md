@@ -52,9 +52,14 @@ equity-curve-driven 0-4 exposure throttle wired into sizing.
 ## Environment notes (do not re-derive)
 
 - Blocked (org egress policy, do NOT retry): yfinance/Yahoo, Alpaca, Binance,
-  FRED, stooq, figshare, kaggle, **huggingface.co** (403 on CONNECT, verified
-  against the proxy status endpoint 2026-07-27), all commercial data APIs.
+  FRED, stooq, figshare, kaggle, **huggingface.co**, **api.coingecko.com**,
+  **data.binance.vision** (each verified 403-on-CONNECT 2026-07-27; the
+  binance.vision HEAD response mimics an origin 403 — the GET shows the
+  proxy denial). All commercial data APIs.
   Reachable: github clone/raw, gitlab.com, bitbucket.org, pypi.
+- Unblock candidates for the environment allowlist, in value order:
+  api.coingecko.com (crypto price/mktcap/volume, no key),
+  huggingface.co (FNSPID equity panel), data.binance.vision (exchange klines).
 - Universe expansion re-tested 2026-07-27 against 7 git-hosted candidates,
   each verified by clone or raw fetch rather than by README claim. Nothing
   reachable carries a bulk daily US-equity panel past 2017:
