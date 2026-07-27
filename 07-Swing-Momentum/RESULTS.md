@@ -268,21 +268,24 @@ Every ablation number is within rounding of the previously reported values.
 `agent/` implements the framework as an executable rulebook — 30
 deterministic guardrails plus an LLM judge, `final = max(guardrail, judge)`
 so the model can only escalate (see `agent/README.md`). Running it over the
-**strategy's own filled trades** turns the table above into measurements:
+**1,049 trades the book actually filled** (of 1,492 candidates) turns the
+table above into measurements. Each card carries the real geometry, the real
+stop, the size the backtest actually took after its notional cap, and the
+equity curve the backtest actually had on that day:
 
 | finding | share of filled trades | what it means |
 |---|---|---|
-| `STOP_NOT_STRUCTURAL` | ~98% flag | the stop is the signal bar's low, which sits above the base low almost always — a materially tighter, more easily-shaken stop than the one he describes |
-| `RISK_TOO_WIDE_ADR` | ~19% flag | trades between 1.0 and 1.5 ADR of stop distance, which his stated rule would skip |
-| `REGIME_CONTRADICTED` + `PRESS_INTO_DRAWDOWN` | ~7% veto | the book sized *up* to its top tier while its own equity was more than 5% off its high — precisely the behaviour the framework exists to prevent |
-| `ACCOUNT_RISK_EXCEEDED` | flag on tier-2 trades | 2% of equity per trade at the top tier, against his ~1% norm |
+| `STOP_NOT_STRUCTURAL` | **97.8%** flag | the stop is the signal bar's low, which sits above the base low in almost every trade — a materially tighter, more easily-shaken stop than the one he describes |
+| `RISK_TOO_WIDE_ADR` | 18.1% flag | stop distance between 1.0 and 1.5 ADR, which his stated rule would skip |
+| `REGIME_CONTRADICTED` + `PRESS_INTO_DRAWDOWN` | **8.1%** veto | the book sized *up* to its top tier while its own equity was more than 5% off its high — precisely the behaviour the framework exists to prevent |
+| `ACCOUNT_RISK_EXCEEDED` | 11.8% flag | more than 1% of equity at risk on a single trade, against his ~1% norm |
 
-Under 1% of the strategy's trades are clean passes. That is not a bug —
-most findings are FLAG-level and a mechanical scan will always look sloppy
-next to a discretionary trader's own account of his rules — but the two
-VETO categories are exactly the missing feedback loop, now with a number
-attached: **7% of the trades this system took, it took while pressing into
-its own drawdown.**
+Between 0.4% and 1.0% of trades per window are clean passes. That is not by
+itself damning — most findings are FLAG-level, and a mechanical scan will
+always look sloppy next to a discretionary trader's own account of his
+rules. The two VETO categories are the part that matters, because they are
+the missing feedback loop with a number attached: **8% of the trades this
+system took, it took while pressing into its own drawdown.**
 
 ## 4. Does this rescue the strategy?
 

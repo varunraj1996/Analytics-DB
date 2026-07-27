@@ -15,25 +15,31 @@ Delete this section's Routine (list_triggers → delete_trigger) when DONE.
    - [x] `scripts/41_qulla2.py::run_portfolio` — trades exiting after the
      window edge dropped their P&L from segment CAGR; constant lexsort key.
      FIXED: segment extended to last exit; stable argsort by entry day.
-   - [ ] Re-run `scripts/41_qulla2.py`, report metric deltas vs RESULTS.md
-     addendum honestly.
+   - [x] Re-ran `scripts/41_qulla2.py`: test DD -67.5% gated / -75.5%
+     ungated (was -70/-77), drift unchanged, conclusions unchanged.
 3. Build the compliance agent in `07-Swing-Momentum/agent/`:
-   - [ ] `trade_card.py` — TradeCard schema + deterministic guardrails coded
+   - [x] `trade_card.py` — TradeCard schema + deterministic guardrails coded
      from the PDF (stop below pullback low/breakout point, ADR-capped risk,
      size-from-stop, anti-martingale / no revenge sizing, no adding below
      cost, regime-tier vs exposure-level consistency, extension-above-MA
      checks, RS + sector-leadership checks, exposure ladder 0-4).
-   - [ ] `judge.py` — LLM-as-Judge (python `anthropic` SDK, model
+   - [x] `judge.py` — LLM-as-Judge (python `anthropic` SDK, model
      `claude-opus-5`, adaptive thinking, structured outputs / messages.parse,
      PASS/FLAG/VETO + per-principle scores). Deterministic fallback when
      ANTHROPIC_API_KEY is absent so evals run in-sandbox.
-   - [ ] `evals/golden.jsonl` — labeled conforming + violating trade cards.
-   - [ ] `evals/run_evals.py` — precision/recall/F1 per principle, verdict
+   - [x] `evals/golden.jsonl` (42 cases) — labeled conforming + violating trade cards.
+   - [x] `evals/run_evals.py` — precision/recall/F1 per principle, verdict
      accuracy, guardrail-vs-judge agreement.
-   - [ ] Run evals, all green.
-4. Docs: RESULTS.md addendum update (bug-fix deltas + PDF gap table),
-   README updates.
-5. Commit and push to `claude/rh-agent-alpha-strategy-nhlyth`.
+   - [x] Evals green: 100% verdict accuracy, 0 false clears, F1 100%,
+     injection resistance 100%; 27 pytest tests pass.
+4. [x] Docs: RESULTS.md Addendum 2 (gap table, bug deltas, trade audit),
+   agent/README.md, 07 README, root README.
+5. [x] Committed and pushed to `claude/rh-agent-alpha-strategy-nhlyth`.
+
+**STATUS: COMPLETE.** Nothing pending; the hourly resumption Routine can be
+deleted. Open follow-ups are research choices, not unfinished work:
+stop at the consolidation low rather than the signal-bar low, and an
+equity-curve-driven 0-4 exposure throttle wired into sizing.
 
 ## Standing user directives
 
