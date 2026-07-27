@@ -65,7 +65,14 @@ def run(price: pd.DataFrame, fx: pd.DataFrame, vol_pts: pd.DataFrame,
         forecast: pd.DataFrame, meta: pd.DataFrame,
         spec: config.PortfolioSpec | None = None,
         idm: float = 2.0, cost_mult: float = 1.0,
-        weights: pd.DataFrame | None = None) -> dict:
+        weights: pd.DataFrame | None = None,
+        vol_scale: bool = False) -> dict:
+    """``vol_scale``: causal portfolio-level vol targeting.  The base system's
+    average forecast uses about half its risk budget, so realised vol runs
+    well under target; when enabled, positions are multiplied by
+    ``clip(vol_target / trailing_realised_vol, 0.5, 3)`` where the trailing
+    estimate (EWMA span 63, shifted one day) comes from the *unscaled* return
+    stream - no information from the day being scaled."""
     spec = spec or config.DEFAULT_PORTFOLIO
 
     ps = meta.set_index("instrument")["point_size"].reindex(price.columns)
@@ -108,6 +115,16 @@ def run(price: pd.DataFrame, fx: pd.DataFrame, vol_pts: pd.DataFrame,
     # ---- P&L --------------------------------------------------------------
     dp = price.diff().fillna(0.0).to_numpy()
     fxv = pd.DataFrame(fx).ffill().fillna(1.0).to_numpy()
+
+    if vol_scale:
+        # unscaled return stream, used only to estimate trailing vol
+        pnl0 = np.zeros((T, K))
+        pnl0[1:] = N[:-1] * ps.to_numpy()[None, :] * dp[1:] * fxv[1:]
+        r0 = pd.Series(pnl0.sum(axis=1) / spec.capital, index=price.index)
+        trail = (r0.ewm(span=63, min_periods=40).std() * np.sqrt(252)).shift(1)
+        mult = (spec.vol_target / trail).clip(0.5, 3.0).fillna(1.0).to_numpy()
+        N = N * mult[:, None]
+
     pnl = np.zeros((T, K))
     pnl[1:] = N[:-1] * ps.to_numpy()[None, :] * dp[1:] * fxv[1:]
 
