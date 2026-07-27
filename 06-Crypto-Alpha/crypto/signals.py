@@ -1,0 +1,165 @@
+"""Signals: price-based, on-chain, and cross-sectional.
+
+Everything returns a forecast matrix (dates x assets) in capped z-units, and
+everything is **lagged by ``config.SIGNAL_LAG`` days at the end**, because a
+Coin Metrics daily metric for day T is published after T closes and is
+subsequently revised. Not lagging on-chain data is the single most common way
+crypto factor studies leak.
+
+Normalisation is expanding-window per asset (never full-sample), so a forecast
+on day T only knows what was knowable on day T.
+"""
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from . import config
+
+CAP = config.FC_CAP
+
+
+# ---------------------------------------------------------------------------
+def _cap(x: pd.DataFrame) -> pd.DataFrame:
+    return x.clip(-CAP, CAP)
+
+
+def _expanding_z(raw: pd.DataFrame, min_periods: int = 180) -> pd.DataFrame:
+    """z-score against the asset's own expanding history."""
+    mu = raw.expanding(min_periods=min_periods).mean()
+    sd = raw.expanding(min_periods=min_periods).std()
+    return _cap((raw - mu) / sd.replace(0.0, np.nan))
+
+
+def _expanding_scale(raw: pd.DataFrame, min_periods: int = 120) -> pd.DataFrame:
+    """Divide by expanding mean-absolute value (keeps sign, sets scale)."""
+    s = raw.abs().expanding(min_periods=min_periods).median()
+    return _cap(raw / s.replace(0.0, np.nan))
+
+
+def lag(f: pd.DataFrame) -> pd.DataFrame:
+    return f.shift(config.SIGNAL_LAG)
+
+
+# ---------------------------------------------------------------------------
+# price-based
+# ---------------------------------------------------------------------------
+def vol(price: pd.DataFrame, span: int = 35) -> pd.DataFrame:
+    r = price.pct_change()
+    v = r.ewm(span=span, min_periods=20).std()
+    return v.clip(lower=1e-4)
+
+
+def ewmac(price: pd.DataFrame, fast: int, slow: int) -> pd.DataFrame:
+    lp = np.log(price)
+    raw = (lp.ewm(span=fast, min_periods=fast).mean()
+           - lp.ewm(span=slow, min_periods=slow).mean()) / vol(price)
+    return lag(_expanding_scale(raw))
+
+
+def breakout(price: pd.DataFrame, n: int) -> pd.DataFrame:
+    hi = price.rolling(n, min_periods=n // 2).max()
+    lo = price.rolling(n, min_periods=n // 2).min()
+    raw = (price - (hi + lo) / 2) / (hi - lo).replace(0.0, np.nan)
+    return lag(_expanding_scale(raw.ewm(span=max(n // 4, 2), min_periods=2).mean()))
+
+
+# ---------------------------------------------------------------------------
+# on-chain
+# ---------------------------------------------------------------------------
+def mvrv_value(mvrv: pd.DataFrame) -> pd.DataFrame:
+    """Market cap / realised cap. High = holders sitting on large unrealised
+    gains = historically a poor forward return. The signal is the *negative*
+    z-score: a value/mean-reversion factor, and the best-documented on-chain
+    effect there is."""
+    return lag(-_expanding_z(np.log(mvrv.where(mvrv > 0))))
+
+
+def exchange_netflow(flow_in: pd.DataFrame, flow_out: pd.DataFrame,
+                     mktcap: pd.DataFrame, span: int = 7) -> pd.DataFrame:
+    """Net USD moving ONTO exchanges, scaled by market cap. Inflow is supply
+    arriving at the venue where it can be sold, so the forecast is negative
+    net inflow. BTC and ETH only."""
+    net = (flow_in - flow_out) / mktcap.replace(0.0, np.nan)
+    return lag(-_expanding_z(net.ewm(span=span, min_periods=5).mean()))
+
+
+def exchange_supply_trend(sply_ex: pd.DataFrame, n: int = 30) -> pd.DataFrame:
+    """Falling exchange balances = coins moving to self-custody = supply
+    leaving the market. Forecast is the negative of the change."""
+    chg = np.log(sply_ex.where(sply_ex > 0)).diff(n)
+    return lag(-_expanding_scale(chg))
+
+
+def address_momentum(addr: pd.DataFrame, n: int = 30) -> pd.DataFrame:
+    """Growth in active addresses - network adoption as a momentum proxy."""
+    g = np.log(addr.where(addr > 0)).diff(n)
+    return lag(_expanding_scale(g))
+
+
+def nvt(mktcap: pd.DataFrame, tx: pd.DataFrame, span: int = 28) -> pd.DataFrame:
+    """Network value to transactions - crypto's price/earnings. High NVT =
+    expensive relative to chain usage, so the forecast is negative."""
+    ratio = mktcap / tx.replace(0.0, np.nan)
+    sm = ratio.ewm(span=span, min_periods=14).mean()
+    return lag(-_expanding_z(np.log(sm.where(sm > 0))))
+
+
+def hash_ribbon(hashrate: pd.DataFrame, fast: int = 30, slow: int = 60) -> pd.DataFrame:
+    """Miner capitulation/recovery: the 30d hash MA crossing back above the
+    60d has historically marked local bottoms in proof-of-work assets."""
+    h = np.log(hashrate.where(hashrate > 0))
+    raw = h.ewm(span=fast, min_periods=fast).mean() - h.ewm(span=slow, min_periods=slow).mean()
+    return lag(_expanding_scale(raw))
+
+
+# ---------------------------------------------------------------------------
+# cross-sectional (rank within each day, demeaned -> dollar-neutral tilt)
+# ---------------------------------------------------------------------------
+def cross_sectional(raw: pd.DataFrame, min_names: int = 5) -> pd.DataFrame:
+    """Convert any signal into a within-day cross-sectional score in [-CAP,CAP].
+
+    Ranks across assets on each date, centred so the average tilt is zero: the
+    resulting book is long the top names and short the bottom, which strips out
+    the market beta that dominates every crypto return series.
+    """
+    ok = raw.notna().sum(axis=1) >= min_names
+    r = raw.rank(axis=1, pct=True)
+    # rank-pct over k names averages to 0.5 + 1/(2k), not 0.5, so subtracting a
+    # literal 0.5 leaves a small long bias that grows as names drop out.
+    # Demean against the row's own mean instead.
+    centred = r.sub(r.mean(axis=1), axis=0)
+    span = centred.abs().max(axis=1).replace(0.0, np.nan)
+    z = centred.div(span, axis=0) * CAP
+    return z.where(ok, np.nan)
+
+
+def xs_momentum(price: pd.DataFrame, n: int = 60, skip: int = 1) -> pd.DataFrame:
+    ret = np.log(price).diff(n).shift(skip)
+    return lag(cross_sectional(ret))
+
+
+def xs_reversal(price: pd.DataFrame, n: int = 7) -> pd.DataFrame:
+    ret = np.log(price).diff(n)
+    return lag(cross_sectional(-ret))
+
+
+def xs_from(f: pd.DataFrame) -> pd.DataFrame:
+    """Cross-sectionalise an already-lagged time-series forecast."""
+    return cross_sectional(f)
+
+
+# ---------------------------------------------------------------------------
+def combine(parts: dict[str, pd.DataFrame], weights: dict[str, float]) -> pd.DataFrame:
+    num = den = None
+    for k, w in weights.items():
+        if w == 0 or k not in parts:
+            continue
+        f = parts[k]
+        m = f.notna().astype(float) * w
+        v = f.fillna(0.0) * w
+        num = v if num is None else num + v
+        den = m if den is None else den + m
+    if num is None:
+        raise ValueError("no active signals")
+    return _cap(num / den.replace(0.0, np.nan))
