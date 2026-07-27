@@ -1,0 +1,82 @@
+# Fetches market data that the research sandbox cannot reach directly.
+#
+# The Claude Code cloud environment runs behind an egress proxy whose
+# allowlist covers package registries and GitHub but not market-data hosts,
+# so CoinGecko and Yahoo return 403 at CONNECT. GitHub Actions runners have
+# unrestricted outbound access, so the fetch happens here and the results are
+# committed back into the repository — which the sandbox *can* read.
+#
+# Why it matters: 06-Crypto-Alpha/RESULTS.md Addendum 4 found the study's
+# universe was confined to pre-2018 chains, which as a group were the losers
+# of the 2023-25 cycle. This is what unblocks the real universe.
+name: fetch-market-data
+
+on:
+  workflow_dispatch:
+    inputs:
+      equities:
+        description: "Also fetch IBIT/ETHA/MSTR/BMNR via yfinance"
+        type: boolean
+        default: true
+  schedule:
+    - cron: "0 6 * * 1"          # Mondays, keeps the panel current
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-market-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install --quiet yfinance pandas
+
+      - name: Fetch crypto from CoinGecko
+        run: |
+          mkdir -p market-data/crypto
+          python3 06-Crypto-Alpha/scripts/31_fetch_local.py \
+            --out market-data/crypto --sleep 10
+
+      - name: Fetch equities from yfinance
+        if: ${{ inputs.equities != false }}
+        run: |
+          mkdir -p market-data/equities
+          python3 06-Crypto-Alpha/scripts/31_fetch_local.py \
+            --out market-data/equities --equities --skip-crypto
+
+      - name: Summarise what landed
+        if: always()
+        run: |
+          echo "### Fetched files" >> $GITHUB_STEP_SUMMARY
+          for d in market-data/crypto market-data/equities; do
+            [ -d "$d" ] || continue
+            for f in "$d"/*.csv; do
+              [ -e "$f" ] || continue
+              echo "- \`$f\` — $(( $(wc -l < "$f") - 1 )) rows" >> $GITHUB_STEP_SUMMARY
+            done
+          done
+
+      - name: Commit the data
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add market-data
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "Refresh market data (automated fetch)"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

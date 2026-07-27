@@ -129,19 +129,22 @@ def main() -> None:
                     help="seconds between calls; CoinGecko free tier is strict")
     ap.add_argument("--equities", action="store_true",
                     help="also fetch IBIT/ETHA/MSTR/BMNR via yfinance")
+    ap.add_argument("--skip-crypto", action="store_true",
+                    help="equities only; skip the CoinGecko pass")
     ap.add_argument("--only", nargs="*", help="subset of symbols")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    want = {k: v for k, v in COINS.items()
-            if not args.only or k in set(args.only)}
-    print(f"fetching {len(want)} crypto assets into {args.out}")
-    ok = 0
-    for sym, cid in want.items():
-        print(f"  {sym.upper()} ({cid})")
-        ok += bool(fetch_coin(sym, cid, args.out))
-        time.sleep(args.sleep)
-    print(f"\n{ok}/{len(want)} crypto assets written")
+    if not args.skip_crypto:
+        want = {k: v for k, v in COINS.items()
+                if not args.only or k in set(args.only)}
+        print(f"fetching {len(want)} crypto assets into {args.out}")
+        ok = 0
+        for sym, cid in want.items():
+            print(f"  {sym.upper()} ({cid})")
+            ok += bool(fetch_coin(sym, cid, args.out))
+            time.sleep(args.sleep)
+        print(f"\n{ok}/{len(want)} crypto assets written")
 
     if args.equities:
         print(f"\nfetching {len(EQUITIES)} equities")
