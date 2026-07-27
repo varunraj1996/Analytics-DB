@@ -300,3 +300,42 @@ one item this audit adds: **a stop at the consolidation low rather than the
 signal bar's low**, which is the single largest divergence between the code
 and the method, and the one most likely to matter, since it changes both
 the stop-out rate and the risk unit every position is sized from.
+
+---
+
+# Addendum 3 — does concentration rescue it? No.
+
+Kullamägi compounded a small account by concentrating, so the obvious
+question for a $5,000 account is whether running this book with three
+positions at 5% risk instead of ten at 1% turns it around. It does not.
+Full stack (pullback entry + RS + sector leadership), regime-tiered sizing,
+15 bps per side:
+
+| slots | risk/trade | train | validate | test |
+|---|---|---|---|---|
+| 10 | 1% | −11.1% (Sh −1.20) | −20.4% (Sh −1.87) | −23.2% (Sh −2.03) |
+| 5 | 2% | −13.8% (Sh −0.99) | −24.5% (Sh −1.45) | −23.0% (Sh −1.30) |
+| 5 | 5% | −20.2% (Sh −0.95) | −34.3% (Sh −1.36) | −32.7% (Sh −1.20) |
+| 3 | 3% | −10.8% (Sh −0.65) | −19.6% (Sh −0.95) | −12.8% (Sh −0.52) |
+| 2 | 5% | −14.0% (Sh −0.59) | −23.8% (Sh −0.76) | −14.2% (Sh −0.34) |
+| 1 | 10% | −13.2% (Sh −0.72) | −13.9% (Sh −0.54) | −7.4% (Sh −0.21) |
+
+Drawdowns run −47% to −99% across the grid. Every cell loses in every
+window.
+
+The apparent improvement down the column is a trap worth naming. Sharpe
+climbs from −2.03 to −0.21 as the book concentrates, and CAGR from −23% to
+−7%, which reads like concentration helping. It is not. Fewer slots means
+fewer trades, which means less capital exposed to a negative per-trade
+expectancy and a noisier estimate of it. The edge per trade is unchanged;
+only the sample size and the exposure shrink. A less statistically
+significant loss is still a loss.
+
+**The general rule this pins down:** concentration is a multiplier on
+whatever expectancy you already have. On the crypto book, which has a
+positive one, concentrating from eighteen names to five roughly tripled the
+net return after retail fees (`06-Crypto-Alpha` addendum). Here, where the
+per-trade expectancy is negative, concentration multiplies the loss and adds
+variance. It is never a fix for an edge that is not there — which is the
+whole reason the concentration question has to be answered with a test
+rather than an argument.

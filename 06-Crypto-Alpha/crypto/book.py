@@ -24,10 +24,24 @@ from . import config
 def build(price: pd.DataFrame, fc: pd.DataFrame,
           spec: config.PortfolioSpec | None = None,
           half_spread_bps: float | None = None,
-          vol_scale: bool = True, gross_cap: float = 1.0) -> dict:
+          vol_scale: bool = True, gross_cap: float = 1.0,
+          top_n: int | None = None, rebalance_freq: str | None = None) -> dict:
+    """``top_n`` keeps only the N strongest forecasts each day and spreads the
+    book across those; ``rebalance_freq`` (a pandas offset such as ``"2W"``)
+    holds weights fixed between rebalance dates.
+
+    Both exist for the small-account case. A book that rebalances 18 names
+    daily turns over 21x its capital a year, which is free at institutional
+    cost and ruinous at retail cost. Concentrating and trading fortnightly
+    cuts that by roughly an order of magnitude — see RESULTS.md Addendum.
+    """
     spec = spec or config.DEFAULT_PORTFOLIO
     hs = (config.DEFAULT_HALF_SPREAD_BPS if half_spread_bps is None
           else half_spread_bps) / 1e4
+
+    if top_n is not None and top_n < fc.shape[1]:
+        # long-only: the strongest forecasts are the largest ones
+        fc = fc.where(fc.rank(axis=1, ascending=False) <= top_n)
 
     ret = price.pct_change()
     av = ret.ewm(span=spec.vol_lookback, min_periods=20).std() * np.sqrt(365)
@@ -64,6 +78,13 @@ def build(price: pd.DataFrame, fc: pd.DataFrame,
                             np.where(held < tgt - width, tgt - width, held))
             out[t] = held
         w = pd.DataFrame(out, index=w.index, columns=w.columns)
+
+    if rebalance_freq:
+        # weights are only allowed to move on rebalance dates; between them
+        # the book is held, which is what makes retail costs survivable
+        marks = w.resample(rebalance_freq).last().index.intersection(w.index)
+        w = w.where(pd.Series(True, index=marks).reindex(w.index, fill_value=False),
+                    np.nan).ffill().fillna(0.0)
 
     pnl = (w.shift(1) * ret).sum(axis=1)
     turn = w.diff().abs().sum(axis=1).fillna(w.abs().sum(axis=1))

@@ -77,3 +77,102 @@ python3 -m crypto.ingest         # coinmetrics -> panel + coverage report
 python3 -m pytest tests -q       # 7 leakage / accounting tests
 python3 scripts/30_study.py      # sweep, validate, single frozen test run
 ```
+
+---
+
+# Addendum — the small-account version: concentrate and trade less
+
+The headline configuration above assumes 10 bps per side. A $5,000 retail
+account does not get 10 bps, and at the fees it does get, the diversified
+book dies:
+
+| fee per side | who charges it | CAGR | Sharpe | cost drag |
+|---|---|---|---|---|
+| 10 bps | institutional / patient maker | 7.8% | 0.80 | 2.1%/yr |
+| 16 bps | Kraken maker, low volume | 6.5% | 0.67 | 3.4%/yr |
+| 26 bps | Kraken taker | 4.2% | 0.46 | 5.5%/yr |
+| 40 bps | Coinbase Advanced, low volume | 1.2% | 0.17 | 8.5%/yr |
+| 60 bps | Coinbase basic | **−3.0%** | −0.25 | 12.7%/yr |
+
+The cause is turnover: **21× capital per year**, because the portfolio-level
+vol overlay rescales all 18 positions every single day. That is free at
+institutional cost and ruinous at retail cost.
+
+## What fixes it — and what does not
+
+Widening the rebalance buffer does not: turnover falls but return falls with
+it, and Sharpe never clears 0.48. Two other things do.
+
+**Rebalance frequency is the big lever.** Holding weights fixed between
+fortnightly rebalances cuts turnover from 21× to under 3× and *raises*
+validation Sharpe, because most daily trading was overlay noise rather than
+signal.
+
+**Concentration raises the return, not the Sharpe.** Restricting the book to
+the N strongest forecasts each day (validation window, 26 bps, weekly):
+
+| holdings | train Sharpe | valid Sharpe | valid CAGR | valid DD | turnover/yr |
+|---|---|---|---|---|---|
+| 1 | 1.13 | 0.60 | 13.4% | −38.1% | 25.5 |
+| 3 | 1.35 | 0.63 | 14.7% | −28.5% | 18.7 |
+| **5** | 1.46 | **0.78** | 18.4% | −21.9% | 16.1 |
+| 12 | 1.52 | 0.74 | 12.8% | −14.1% | 7.9 |
+| 18 (all) | 1.50 | 0.79 | 9.7% | −9.7% | 5.3 |
+
+Note what this is and is not. Sharpe is flat across the range — concentration
+buys nothing risk-adjusted. What it does is raise *gross exposure* (41% at
+five names against 20% at eighteen), so the same edge is applied to more
+capital. It also **increases** turnover, because the top-five set churns.
+Concentration and slow rebalancing therefore have to be adopted together;
+concentrated daily trading is the worst cell in the grid (validation Sharpe
+0.02 at five names).
+
+## Frozen small-account configuration
+
+Selected by the pre-declared rule — highest validation Sharpe, train Sharpe
+≥ 0.5, validation drawdown ≤ 35% — which picks **five holdings, fortnightly
+rebalance, long-only spot**:
+
+| window | CAGR | Sharpe | max DD |
+|---|---|---|---|
+| train ≤2021 | +31.8% | 1.44 | −30.6% |
+| validate 2022–23 | +26.9% | 1.00 | −22.6% |
+| **test 2024–26** | **+12.5%** | **0.63** | **−25.9%** |
+
+At 23.1% realised volatility and −0.17 skew, on 34% mean gross exposure.
+Against the diversified book at the same 26 bps (4.2% CAGR, Sharpe 0.46),
+concentration plus fortnightly trading roughly **triples the net return** and
+lifts Sharpe by a third — at roughly double the drawdown.
+
+And it is now nearly fee-proof, which was the entire point:
+
+| fee per side | 10 | 16 | 26 | 40 | 60 |
+|---|---|---|---|---|---|
+| CAGR | 14.0% | 13.5% | 12.5% | 11.3% | 9.4% |
+| Sharpe | 0.69 | 0.66 | 0.63 | 0.58 | 0.51 |
+
+The diversified book lost money at 60 bps. This one still compounds at 9.4%.
+
+*Disclosure:* the test window was examined several times during this cost
+analysis before this configuration was frozen, so 0.63 is not a virgin
+single-shot number and should be discounted. The mitigating fact is that the
+*selection* was made on validation, and validation independently preferred
+fortnightly rebalancing — two windows agreeing on the same structural choice
+is better evidence than either alone.
+
+## On reaching 25% with this
+
+Not at a survivable drawdown. Sharpe is leverage-invariant, so pushing the
+vol target up moves both numbers together:
+
+| vol target | mean gross | CAGR | max DD |
+|---|---|---|---|
+| 30% | 34% | 12.5% | −25.9% |
+| 50% | 57% | 18.2% | −40.3% |
+| 75% | 84% | 20.9% | −55.4% |
+| 125% | 139% | 23.8% | −73.2% |
+
+25% a year arrives at roughly −73% drawdown, and needs sustained borrowing
+past 100% gross, which spot does not give you. **The defensible setting is
+the first row: about 12.5% a year with a −26% drawdown** — on $5,000, roughly
+$625 in a good year, and −$1,300 at the low point of a bad one.
