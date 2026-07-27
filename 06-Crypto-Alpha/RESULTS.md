@@ -375,9 +375,30 @@ of names.
 The universe still excludes every major asset launched after 2018, so the
 result is measured on a systematically stale slice of crypto. Adding SOL and
 its peers is the single highest-value change available and it needs a data
-source this environment cannot reach. Until then, treat these numbers as
-"what an on-chain book could earn if restricted to legacy assets", not as an
-estimate of the strategy on the real market.
+source this environment cannot reach.
+
+Three routes out, in order of preference:
+
+1. **Allowlist the hosts.** The block is this environment's egress policy,
+   which is configurable per environment (see the Claude Code on the Web
+   docs, network policies). Allowing `api.coingecko.com` (and optionally
+   `huggingface.co`, Yahoo) lets the whole loop run in-session, permanently.
+2. **Run `scripts/31_fetch_local.py` on any unrestricted machine.** It
+   fetches the 23 missing assets from CoinGecko's free API (price, market
+   cap, volume — no key needed) and writes CSVs in the exact Coin Metrics
+   schema the ingest reads, plus optionally IBIT/ETHA/MSTR/BMNR via
+   yfinance. Copy the files into `cm/`, run `python3 -m crypto.ingest`,
+   and the panel rebuilds with no code change.
+3. **Restructure the strategy to match the data** — already done in
+   Addendum 4: on-chain signals are confined to BTC/ETH where coverage is
+   complete, and the alt sleeve runs on price/mktcap/volume, which is
+   exactly what CoinGecko supplies for the missing assets. So once the
+   files exist the new universe drops straight into the highest-Sharpe
+   configuration; nothing needs re-deriving.
+
+Until then, treat these numbers as "what an on-chain book could earn if
+restricted to legacy assets", not as an estimate of the strategy on the
+real market.
 
 Standard disclosure: the test window has been examined repeatedly across
 these three addenda. Every configuration choice was made on train and
