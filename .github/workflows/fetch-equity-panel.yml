@@ -1,0 +1,115 @@
+# Builds the post-2017 US equity panel the swing study has never had.
+#
+# 07-Swing-Momentum tests Qullamaggie's setups on 6,009 stocks that end
+# 2017-11, which is the study's single largest limitation: no modern window,
+# and no earnings dates for a real episodic-pivot test. FNSPID carries 4,775
+# S&P-500 tickers from 1999 to 2023 with dated news, but it lives on Hugging
+# Face, which this repo's research sandbox cannot reach. Actions runners can.
+#
+# The raw archive is far too large to commit, so the job reduces it here and
+# commits a single compact parquet of daily bars for liquid names.
+name: fetch-equity-panel
+
+on:
+  push:
+    paths:
+      - ".github/equity-request"
+      - ".github/workflows/fetch-equity-panel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-equity-panel
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install --quiet pandas pyarrow requests
+
+      - name: Download and reduce FNSPID
+        run: |
+          python3 - <<'PY'
+          import io, os, zipfile, glob, sys
+          import pandas as pd, numpy as np, requests
+
+          URL = ("https://huggingface.co/datasets/Zihan1004/FNSPID/"
+                 "resolve/main/Stock_price/full_history.zip")
+          print(f"downloading {URL}")
+          r = requests.get(URL, timeout=1800, stream=True)
+          r.raise_for_status()
+          buf = io.BytesIO()
+          for chunk in r.iter_content(1 << 20):
+              buf.write(chunk)
+          print(f"  {buf.tell()/1e6:.0f} MB")
+
+          os.makedirs("_raw", exist_ok=True)
+          with zipfile.ZipFile(buf) as z:
+              z.extractall("_raw")
+          files = glob.glob("_raw/**/*.csv", recursive=True)
+          print(f"  {len(files)} ticker files")
+
+          frames, kept = [], 0
+          for f in files:
+              tic = os.path.basename(f)[:-4].upper()
+              try:
+                  d = pd.read_csv(f)
+              except Exception:
+                  continue
+              cols = {c.lower(): c for c in d.columns}
+              need = ("date", "open", "high", "low", "close", "volume")
+              if not all(n in cols for n in need):
+                  continue
+              d = d.rename(columns={cols[n]: n for n in need})[list(need)]
+              d["date"] = pd.to_datetime(d["date"], errors="coerce")
+              d = d.dropna(subset=["date", "close"])
+              d = d[(d["date"] >= "2010-01-01") & (d["close"] > 1)]
+              if len(d) < 750:                       # need real history
+                  continue
+              addv = (d["close"] * d["volume"]).median()
+              if not np.isfinite(addv) or addv < 3e6:  # tradable liquidity
+                  continue
+              d["ticker"] = tic
+              frames.append(d)
+              kept += 1
+          print(f"  kept {kept} liquid tickers")
+          if kept < 200:
+              sys.exit(f"FATAL: only {kept} tickers survived the filter")
+
+          panel = pd.concat(frames, ignore_index=True)
+          for c in ("open", "high", "low", "close"):
+              panel[c] = panel[c].astype("float32")
+          panel["volume"] = panel["volume"].astype("float64")
+          panel["ticker"] = panel["ticker"].astype("category")
+          os.makedirs("market-data/equity-panel", exist_ok=True)
+          out = "market-data/equity-panel/fnspid_daily.parquet"
+          panel.to_parquet(out, compression="zstd", index=False)
+          mb = os.path.getsize(out) / 1e6
+          print(f"wrote {out}: {len(panel):,} rows, {kept} tickers, "
+                f"{panel.date.min().date()} -> {panel.date.max().date()}, {mb:.0f} MB")
+          if mb > 95:
+              sys.exit(f"FATAL: {mb:.0f} MB exceeds the git file limit")
+          PY
+
+      - name: Commit the panel
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add market-data/equity-panel
+          if git diff --cached --quiet; then
+            echo "::error::no panel produced"
+            exit 1
+          fi
+          git commit -m "Add FNSPID equity panel (automated fetch)"
+          git push origin HEAD:${{ github.ref_name }}
