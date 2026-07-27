@@ -12,6 +12,15 @@
 name: fetch-market-data
 
 on:
+  # workflow_dispatch only becomes available once this file reaches the
+  # default branch, so the push trigger below is what makes it runnable from
+  # a feature branch. It is scoped to a marker file: touching
+  # .github/fetch-request fires a fetch, and the data commit the job makes
+  # cannot re-trigger it (GITHUB_TOKEN pushes do not start workflows).
+  push:
+    paths:
+      - ".github/fetch-request"
+      - ".github/workflows/fetch-market-data.yml"
   workflow_dispatch:
     inputs:
       equities:
