@@ -186,6 +186,12 @@ CASES = [
     ("thin_liquidity", "FLAG", ["LIQUIDITY"], [], {
         "ticker": "THIN", "addv_usd": 900_000.0,
         "rationale": "Small cap, barely trades, but the chart is perfect."}),
+    ("position_bigger_than_account", "VETO", ["CONCENTRATION"],
+     ["ACCOUNT_RISK_EXCEEDED"], {
+        "ticker": "MARGN", "stop_price": 96.0, "consolidation_low": 96.2,
+        "shares": 12500.0, "baseline_risk_pct": 0.05,
+        "rationale": "Risking 5% with the stop 4% away — three of these and "
+                     "I am at 375% of the account."}),
     ("concentration", "FLAG", ["CONCENTRATION"], [], {
         "ticker": "CONCN", "stop_price": 98.0, "consolidation_low": 98.1,
         "shares": 4500.0, "baseline_risk_pct": 0.009,

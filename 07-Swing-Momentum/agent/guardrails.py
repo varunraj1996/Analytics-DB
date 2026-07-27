@@ -55,6 +55,10 @@ class Policy:
     max_account_risk_flag: float = 0.010  # 1.0% of equity
     max_account_risk_veto: float = 0.020  # 2.0%
     max_position_weight: float = 0.35     # single name vs equity
+    # A risk-sized position with a tight stop can exceed the account: risking
+    # 5% with the stop 4% away puts 125% of equity into one name. That is
+    # borrowed money, and a cash account simply cannot place the order.
+    max_position_weight_veto: float = 1.00
     size_tolerance: float = 0.25          # |actual/intended - 1| allowed
     # P4 — setup
     min_prior_leg: float = 0.30
@@ -159,7 +163,12 @@ def _check_risk(c: TradeCard, p: Policy, out: list) -> None:
                            f"{ar:.2%} of equity"))
 
     w = c.position_weight_pct
-    if w is not None and w > p.max_position_weight:
+    if w is not None and w > p.max_position_weight_veto:
+        out.append(Finding("CONCENTRATION", VETO,
+                           "this single position is larger than the whole "
+                           "account — the risk budget only fits on margin",
+                           f"{w:.0%} of equity in one name"))
+    elif w is not None and w > p.max_position_weight:
         out.append(Finding("CONCENTRATION", FLAG,
                            "single position is a large share of the account",
                            f"{w:.0%} of equity"))
