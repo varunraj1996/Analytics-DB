@@ -172,7 +172,7 @@ turnover per trade, costs of 40–75 bps/trade sit on top of a gross edge of
 drawdown versus no gate in test (−70% vs −77%) — but a smaller loss is still
 a loss.
 
-**Where this leaves the claim.** Across three independent implementations
+**Where this leaves the claim (v2).** Across three independent implementations
 (daily chase, intraday ORH at 10-min, daily pullback with RS/sector/regime),
 the same number keeps appearing: the pattern's gross edge is 0–30 bps against
 20–75 bps of realistic friction. The nuances are real — they moved the drift
@@ -182,3 +182,118 @@ change the verdict, in order: a fresh universe through 2026 including
 delistings; true intraday entries (his ORH is a 1/5/60-minute decision);
 earnings dates for real episodic pivots. The machinery is built and tested —
 it is the data that is binding.
+
+---
+
+# Addendum 2 — audited against his decision framework, and two bugs found
+
+Direct question: *have you accounted for everything, and does the script
+execute properly?* Honest answer: **no on the first, and no on the second —
+two real bugs, both now fixed.**
+
+## 1. What the framework says and what the code did
+
+The decision framework is not a setup document. It is a **feedback loop**:
+the market call comes from the trader's own results, and the exposure
+throttle follows the equity curve.
+
+> Trade works → equity up → add size → press.
+> Trade fails → equity down → cut size → cash.
+> Never trade bigger to make it back.
+
+Mapping every rule in it against what `swing/` actually implemented:
+
+| Framework rule | Status before this audit |
+|---|---|
+| Big prior leg → orderly contraction → pullback to rising 10/20 MA on drying volume | **implemented** (`qulla2.pullback_bounce`) |
+| Buy the first strength day out of the pullback | **implemented** (close > prior high on expanding volume) |
+| Stop below the consolidation low / breakout point | **partial** — uses the *signal bar's* low, not the base low |
+| Size from the stop; skip if the stop is more than ~1 ADR away | **implemented**, but at 1.5 ADR rather than 1.0 |
+| Sell into strength; partial day 3–5; then breakeven | **implemented** — but see bug 1: the "into strength" half never fired |
+| Trail the remainder on the 10/20 MA | **implemented** |
+| Only top-RS names, only leading groups; track rotation | **implemented** (top-decile RS, 20 causal correlation clusters) |
+| Wait in chop, unleash in trend | **implemented as an index/breadth gate** — not as the framework defines it |
+| **Regime read from your own breakouts firing or failing** | **missing** |
+| **Regime read from your own equity curve making highs or not** | **missing** |
+| **PRESS / PROBE / STAND DOWN as an explicit state** | **missing** |
+| **Exposure throttle 0–4, leverage only at 4** | **missing** — sizing was 0×/1×/2× off the index gate alone |
+| **Cut size after losses; never size up to recover** | **missing** — risk per trade was constant regardless of drawdown |
+| **Trim because the move is extended above the MA** | **missing** — partials were taken on a day count only |
+| Watchlist-building during corrections | **not applicable** to a mechanical scan |
+
+The five bolded rows are one idea: **the strategy never looked at its own
+results.** Its regime input was SPY and breadth — external, and available to
+everybody — while the framework's regime input is the trader's own
+feedback. That is the substantive thing I had not accounted for, and it is
+the part of his process that most plausibly does work, because it is the
+only part that adapts to the operator rather than to the tape.
+
+## 2. Two bugs in the script
+
+**Bug 1 — the profit-taking rule was dead code.** In `swing/setups.py`:
+
+```python
+if (not took_partial) and held >= partial_days:      # outer gate
+    if r_now >= target_r or held >= partial_days:    # …inner is always true
+```
+
+The inner condition can only be evaluated when `held >= partial_days` is
+already true, so `target_r` never decided anything. Every trade took its
+partial on a fixed day count, and "sell into strength" — the rule that gets
+you paid when a name runs 3R in two days — was never tested. Fixed by
+lifting the outer gate so the target can fire early.
+
+**Bug 2 — the window-edge P&L leak.** In `scripts/41_qulla2.py`, segment
+returns were sliced `eq[lo:hi+1]`, so any trade entered inside a window but
+exiting after it contributed nothing to that window's CAGR. With a ~5-day
+average hold this mostly affects the boundary, but it is a silent
+understatement. Fixed by extending the segment to the last exit. A constant
+sort key (`-t.r * 0`) in the same function was also replaced with a stable
+sort by entry day — it was harmless, but it read as if it did something.
+
+**What the fixes changed:** essentially nothing about the conclusion, which
+is the point of reporting them.
+
+| | before | after |
+|---|---|---|
+| test portfolio, gate on | −70% max DD | −67.5% max DD, −23.4% CAGR, Sharpe −2.07 |
+| test portfolio, gate off | −77% max DD | −75.5% max DD, −29.1% CAGR, Sharpe −2.60 |
+| train / valid / test drift by layer | unchanged | unchanged |
+
+The regime gate still halves nothing that matters: it makes a loss smaller.
+Every ablation number is within rounding of the previously reported values.
+
+## 3. The agent, pointed at my own backtest
+
+`agent/` implements the framework as an executable rulebook — 30
+deterministic guardrails plus an LLM judge, `final = max(guardrail, judge)`
+so the model can only escalate (see `agent/README.md`). Running it over the
+**strategy's own filled trades** turns the table above into measurements:
+
+| finding | share of filled trades | what it means |
+|---|---|---|
+| `STOP_NOT_STRUCTURAL` | ~98% flag | the stop is the signal bar's low, which sits above the base low almost always — a materially tighter, more easily-shaken stop than the one he describes |
+| `RISK_TOO_WIDE_ADR` | ~19% flag | trades between 1.0 and 1.5 ADR of stop distance, which his stated rule would skip |
+| `REGIME_CONTRADICTED` + `PRESS_INTO_DRAWDOWN` | ~7% veto | the book sized *up* to its top tier while its own equity was more than 5% off its high — precisely the behaviour the framework exists to prevent |
+| `ACCOUNT_RISK_EXCEEDED` | flag on tier-2 trades | 2% of equity per trade at the top tier, against his ~1% norm |
+
+Under 1% of the strategy's trades are clean passes. That is not a bug —
+most findings are FLAG-level and a mechanical scan will always look sloppy
+next to a discretionary trader's own account of his rules — but the two
+VETO categories are exactly the missing feedback loop, now with a number
+attached: **7% of the trades this system took, it took while pressing into
+its own drawdown.**
+
+## 4. Does this rescue the strategy?
+
+No, and it is worth being clear about why not. The gaps are real and
+fixable, but they are *risk-management* gaps, and the measured problem is a
+*gross edge* problem: +10 to +30 bps per trade against 40–75 bps of
+round-trip friction on this universe. An exposure throttle changes the path
+and the drawdown; it cannot turn a negative expectancy into a positive one.
+What would change the verdict is still what the v2 addendum said — a
+survivorship-free universe through 2026, and true intraday entries — plus
+one item this audit adds: **a stop at the consolidation low rather than the
+signal bar's low**, which is the single largest divergence between the code
+and the method, and the one most likely to matter, since it changes both
+the stop-out rate and the risk unit every position is sized from.

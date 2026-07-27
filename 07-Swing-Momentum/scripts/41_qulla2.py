@@ -84,14 +84,17 @@ def run_portfolio(ws, t, tier, risk_frac=0.01, max_pos=10, max_new=4,
         return None
     # regime tier at entry -> risk multiplier: 0 in chop, 1x neutral, 2x trend
     mult = np.array([0.0, 1.0, 2.0])[tier[t.entry_day.to_numpy()]]
-    order = np.lexsort((-t.r.to_numpy() * 0, t.entry_day.to_numpy())).astype(np.int64)
+    order = np.argsort(t.entry_day.to_numpy(), kind="stable").astype(np.int64)
     eq, taken = ST.portfolio(order, t.entry_day.to_numpy().astype(np.int64),
                              t.exit_day.to_numpy().astype(np.int64),
                              t.epx.to_numpy(), t.risk.to_numpy(),
                              t.pnl.to_numpy(), t.turn.to_numpy(),
                              ws.n_days, 1e6, float(risk_frac), int(max_pos),
                              0.25, int(max_new), float(cost_bps), mult)
-    seg = eq[lo:hi + 1]
+    # run the segment through the last exit of any window trade, else trades
+    # exiting after `hi` silently drop their P&L from the window's CAGR
+    hi_ext = min(ws.n_days - 1, max(int(hi), int(t.exit_day.max())))
+    seg = eq[lo:hi_ext + 1]
     r = np.diff(seg) / seg[:-1]
     yrs = len(seg) / 252
     dd = (seg / np.maximum.accumulate(seg) - 1).min()

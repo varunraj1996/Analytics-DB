@@ -102,8 +102,9 @@ def simulate(sig_rows, block_end, open_, high, low, close, ma_trail, adr_frac,
                 break
 
             held = k - j
-            # --- scale out on the first burst of strength ------------------
-            if (not took_partial) and held >= partial_days:
+            # --- scale out into strength: at target_r if it comes early, ---
+            # --- otherwise on schedule at partial_days ---------------------
+            if not took_partial:
                 r_now = (close[k] - entry) / risk
                 if r_now >= target_r or held >= partial_days:
                     realized += partial_frac * (close[k] - entry)
