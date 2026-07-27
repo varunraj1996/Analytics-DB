@@ -288,3 +288,98 @@ computed only on train and validation, which is the right procedure, but I
 was searching in the knowledge of what the test window looked like and
 cannot fully purge that. Treat 0.75 as contaminated. A clean read needs data
 after 2026-05.
+
+---
+
+# Addendum 4 — the data audit, and what it changed
+
+Prompted by a fair challenge: *check whether you even have the right data.*
+I did not. Three of the findings are serious enough that the earlier numbers
+should be read as measured on the wrong universe.
+
+## 1. The universe is selected by data availability, not by relevance
+
+Coin Metrics' free tier publishes full price and on-chain history for a set
+of assets that is essentially "chains that existed before 2018". Everything
+that led the 2023–25 cycle returns exactly **seven days** of price — a
+rolling free window — and no on-chain data at all:
+
+| checked | price days | verdict |
+|---|---|---|
+| SOL, AVAX, NEAR, APT, SUI, ARB, OP, TON | 7 each | unusable |
+| SHIB, PEPE, WIF, BONK, JUP, SEI, TIA | 7 each | unusable |
+| HBAR, VET, GRT, INJ, RNDR, FTM | 7 each | unusable |
+| ALGO, CRV, ICP | 2527 / 2107 / 1838 | **added to the panel** |
+
+This is not a filter bug and re-downloading does not fix it — the series do
+not exist in the only crypto source reachable from here. The consequence is
+structural: **the book can only choose among assets that were already old**
+— XRP, XLM, LTC, ETC, BCH, ADA, DOGE — which as a group were the cycle's
+losers. Equal-weight of this universe returned −0.3% while the market
+roughly doubled. That is the reverse of the usual survivorship problem: the
+has-beens are present and the winners are absent by construction.
+
+**Solana cannot be traded in this study.** Neither can any spot-ETF proxy:
+IBIT, ETHA and BMNR appear nowhere, MSTR exists only in an equity dump that
+ends 2017-11, and the one BTC-linked instrument on hand (BTCL, a 2× ETF) has
+a median of 4 bars per day and $37k of daily volume across 340 days with 75
+missing — untradeable at any size.
+
+## 2. Half the frozen forecast did not exist for most of the book
+
+The frozen blend is "50% on-chain valuation + 50% exchange flow". Exchange
+flow is published for **BTC and ETH only**. Signal availability per asset:
+
+| | mvrv | nvt | addr | hash | netflow | exsply |
+|---|---|---|---|---|---|---|
+| BTC | 0.97 | 0.97 | 0.97 | 0.97 | 0.92 | 0.93 |
+| ETH | 0.65 | 0.65 | 0.65 | 0.65 | 0.65 | 0.65 |
+| BNB | **0.08** | 0.53 | 0.09 | — | — | — |
+| TRX | — | — | 0.47 | — | — | — |
+| *11 of 21 assets* | *fewer than two signals available* | | | | | |
+
+So the cross-section was ranking an asset scored on one sparse input against
+one scored on six. BNB — the single largest P&L contributor at +11.9% — has
+MVRV on 8% of its days.
+
+## 3. Volume was in the data all along and never used
+
+`volume_reported_spot_usd_1d` is present for every asset, including the ones
+with no price. Three signals were added from it: volume expansion against
+its own average, turnover against market cap, and momentum confirmed by
+participation.
+
+## What the fixes are worth
+
+Each change selected on train and validation by the worst-regime criterion,
+never on test:
+
+| configuration | train | validate | **test** | test DD |
+|---|---|---|---|---|
+| original frozen (18 assets, on-chain+flow) | 1.44 | 1.00 | **0.63** | −25.9% |
+| + majors trend sleeve (Addendum 3) | 1.40 | 0.96 | **0.75** | −21.3% |
+| + ALGO/CRV/ICP, volume signals, coverage gate | **1.63** | **1.02** | **1.11** | **−16.7%** |
+
+Final: **20.4% CAGR, Sharpe 1.11, −16.7% max drawdown** on the test window,
+against BTC's 27.6% / 0.74 / −49.1%. Lower raw return than simply holding
+Bitcoin, but two-thirds more Sharpe at a third of the drawdown — and unlike
+the earlier versions it is no longer beaten by its own benchmark on
+risk-adjusted terms.
+
+The coverage gate keeps 15.6 alts eligible per day on average, so it is
+excluding sparse asset-days rather than shrinking the universe to a handful
+of names.
+
+## What this does not fix
+
+The universe still excludes every major asset launched after 2018, so the
+result is measured on a systematically stale slice of crypto. Adding SOL and
+its peers is the single highest-value change available and it needs a data
+source this environment cannot reach. Until then, treat these numbers as
+"what an on-chain book could earn if restricted to legacy assets", not as an
+estimate of the strategy on the real market.
+
+Standard disclosure: the test window has been examined repeatedly across
+these three addenda. Every configuration choice was made on train and
+validation, which is the right procedure, but the search itself was informed
+by knowing what test looked like. A clean read needs data after 2026-05.

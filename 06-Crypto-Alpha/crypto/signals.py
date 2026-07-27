@@ -163,3 +163,43 @@ def combine(parts: dict[str, pd.DataFrame], weights: dict[str, float]) -> pd.Dat
     if num is None:
         raise ValueError("no active signals")
     return _cap(num / den.replace(0.0, np.nan))
+
+
+# ---------------------------------------------------------------------------
+# volume — present for every asset in the dump, and unused until the data audit
+# ---------------------------------------------------------------------------
+def volume_expansion(volume: pd.DataFrame, n: int = 30) -> pd.DataFrame:
+    """Today's volume against its own recent average. Participation showing up
+    is what separates a real move from drift."""
+    lv = np.log(volume.where(volume > 0))
+    return lag(_expanding_scale(lv - lv.rolling(n, min_periods=int(n * 0.7)).mean()))
+
+
+def turnover(volume: pd.DataFrame, mktcap: pd.DataFrame) -> pd.DataFrame:
+    """Volume as a share of market cap: attention per unit of size, which is
+    comparable across assets in a way that raw volume is not."""
+    t = (volume / mktcap.replace(0.0, np.nan))
+    return lag(_expanding_z(np.log(t.where(t > 0))))
+
+
+def volume_momentum(price: pd.DataFrame, volume: pd.DataFrame,
+                    n: int = 60) -> pd.DataFrame:
+    """Momentum confirmed by participation — a move on expanding volume scores
+    higher than the same move on fading volume."""
+    lv = np.log(volume.where(volume > 0))
+    return lag(_expanding_scale(price.pct_change(n)
+                                * (lv - lv.rolling(n, min_periods=n // 2).mean())))
+
+
+def coverage_gate(fc: pd.DataFrame, parts: dict, names, min_signals: int):
+    """Blank the forecast where too few of its inputs actually exist.
+
+    The data audit found this matters more than any signal choice. Exchange
+    flow is published for BTC and ETH only, and eleven of twenty-one assets
+    carry fewer than two of the six on-chain signals, so a naive blend ranks
+    an asset scored on one sparse input against one scored on six. This makes
+    the cross-section comparable by refusing to rank what it cannot measure.
+    """
+    navail = sum(parts[s].reindex_like(fc).notna().astype(int)
+                 for s in names if s in parts)
+    return fc.where(navail >= min_signals)
