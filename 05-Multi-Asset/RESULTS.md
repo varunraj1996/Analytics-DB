@@ -101,3 +101,58 @@ python3 scripts/22_test.py          # the single frozen test run + robustness
 Data: `robcarver17/pysystemtrade` (157 kept of 252 instruments after cost/
 history screens; daily back-adjusted prices 1969–2024, carry contracts,
 per-instrument spreads) and the TheSnowGuru spot dump for the cross-check.
+
+---
+
+# Addendum — "SPY/QQQ return 10–14%, you can do better"
+
+Fair challenge, and the first frozen configuration did not clear it: 10.2% CAGR
+at Sharpe 0.72 is index-like returns with extra machinery. Two things change
+the answer.
+
+**1. Fix the construction defects.** Section 7.5 of the year-by-year review
+found three: four `mini`/`micro` duplicate contracts that a dash-vs-underscore
+bug let trade alongside their full-size parents (copper at 3× its intended
+weight), no per-instrument risk cap (VIX and V2X each carrying ~12.5% of
+portfolio risk), and a 10% rebalance buffer burning 2–3.6%/yr in turnover.
+Fixing all three on the same frozen signal weights:
+
+| | CAGR | Sharpe | max DD |
+|---|---|---|---|
+| as first frozen | 10.19% | 0.72 | −35.4% |
+| **+ dedup, 3% name cap, 20% buffer** | **12.52%** | **1.03** | **−24.6%** |
+
+*Disclosure:* these fixes were diagnosed **after** the test window was first
+run, so this is not a clean single-shot out-of-sample number. They are
+structural rather than parameter-fitted — one is a data bug, one is a risk
+limit, one is a turnover control — and they also improve train (1.50) and
+validation (1.45), but the reader should discount accordingly.
+
+**2. Combine rather than replace.** The strategy is +0.25 correlated with
+equities. All figures below are excess-of-cash over 2017-01 → 2024-03, the
+window the signal weights never saw; add ~2%/yr of cash for total return.
+
+| | CAGR | Sharpe | max DD |
+|---|---|---|---|
+| S&P 500 futures | 10.79% | 0.71 | −32.7% |
+| Nasdaq futures | 15.72% | 0.84 | −33.8% |
+| strategy (fixed) | 12.52% | 1.03 | −24.6% |
+| **40% S&P / 60% strategy, levered to S&P vol** | **18.11%** | **1.11** | −35.4% |
+| **40% Nasdaq / 60% strategy, levered to Nasdaq vol** | **23.50%** | **1.18** | −35.2% |
+
+At the Nasdaq's own volatility and no worse drawdown, the blend returns
+**23.5% excess / ~25.5% total against QQQ's 15.7% / ~17.7%** — roughly eight
+points a year, out of sample. Against the S&P it is ~18.1% / ~20% versus
+10.8% / ~12.8%. The blend needs 1.4–1.6× gross, which on futures margin is
+routine but is leverage and should be named as such.
+
+**On 30%.** At the blend's Sharpe of ~1.18, 30% CAGR needs roughly 26–28%
+annualised vol and implies drawdowns near −45%. That is a real risk decision
+rather than an arithmetic impossibility — which is the first time in this
+repository that has been true. At the original 0.72 Sharpe it would have taken
+~50% vol and a −60%+ path.
+
+**What still argues for holding the index too.** Over 1998–2024 the S&P
+returned 4.63% excess at Sharpe 0.35 with a −61% drawdown. 2017–2024 was an
+unusually good stretch for beta; the case for the diversifier is strongest
+precisely in the decades that stretch excludes.
