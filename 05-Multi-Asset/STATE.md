@@ -58,18 +58,17 @@ pre-declared rule; ONE test run of the frozen configuration.
 - [x] 6. `scripts/21_validate.py`: run shortlist on VALIDATION; pre-declared
       selection = highest validation Sharpe among configs whose validation DD
       is within 1.5x train DD and whose train Sharpe >= 0.5. Freeze.
-- [ ] 7. `scripts/22_test.py`: single frozen run on TEST (2017-2024-03).
+- [x] 7. `scripts/22_test.py`: single frozen run on TEST (2017-2024-03).
       Robustness: cost x2/x4, drop-an-asset-class, sub-period table,
       snowguru cross-check panel run with the same frozen weights.
-- [ ] 8. `RESULTS.md` + charts; commit, push. Mark program COMPLETE here and
+- [x] 8. `RESULTS.md` + charts; commit, push. Mark program COMPLETE here and
       delete the continuation Routine (delete_trigger).
 
 ## Current status
 
-Steps 5-6 done. Sweep: 336 configs, ALL positive train Sharpe (0.94-1.79,
-median 1.39) - trend's pre-2010 golden age. Validation (2010-2016, trend's
-hard decade): best ~1.2 Sharpe; family table monotone (carry weight up ->
-better; breakout > none; no_equity best class set). FROZEN by pre-declared
-rule: none|all4|c0.4|s0.1|no_equity (breakout 40/80/160/320 at 50% + carry
-40% + skew 10%, equities excluded), train Sharpe 1.54 / CAGR 30.5%, valid
-Sharpe 1.27 / CAGR 23.3% / DD -18.9%. Working step 7 (single frozen test).
+**PROGRAM COMPLETE.** Frozen config (breakout 40-320 @50% + carry @40% + skew
+@10%, no equities, 25% vol target) out-of-sample 2017..2024-03: CAGR +10.2%,
+Sharpe 0.72 (t=1.98), DD -35.4%; survives 4x costs; no single class carries
+it; 2017/2018 tails driven by VIX carry (attributed in RESULTS.md); spot
+cross-check failed and is reported as the main caveat. Full account in
+RESULTS.md. Continuation Routine deleted.
