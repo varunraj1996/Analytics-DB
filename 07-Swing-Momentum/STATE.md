@@ -60,6 +60,31 @@ equity-curve-driven 0-4 exposure throttle wired into sizing.
 - Unblock candidates for the environment allowlist, in value order:
   api.coingecko.com (crypto price/mktcap/volume, no key),
   huggingface.co (FNSPID equity panel), data.binance.vision (exchange klines).
+  The user must add these in the claude.ai/code environment settings
+  (environment env_01CJ9rCxriY2JmXLiAtbzJp9, network policy / allowed
+  domains — see code.claude.com/docs/en/claude-code-on-the-web). No tool in
+  this session can edit the policy.
+
+## RUNBOOK — execute when api.coingecko.com stops returning 403 (hourly probe Routine active)
+
+1. `cd 06-Crypto-Alpha && python3 scripts/31_fetch_local.py --out <scratch>/cm_new --sleep 8`
+   (urllib honors HTTPS_PROXY; the script works in-session once allowed).
+2. Copy `<scratch>/cm_new/*.csv` into `<scratch>/cm/`, EXCEPT sol.csv — keep
+   the validated composite (NI3singh price + CM mktcap/volume) unless the
+   fresh CoinGecko sol series agrees with it at >0.99 return corr on overlap,
+   in which case prefer CoinGecko (longer + current).
+3. `python3 -m crypto.ingest` — expect ~40+ assets.
+4. Re-run the pre-declared selection grid (coverage gate 0/2/3/4 x volume
+   weight 0/10/20%, majors sleeve 20%, worst-regime rule on train/valid
+   ONLY) — see Addendum 5 code path. New assets have no on-chain fields, so
+   consider the gate definition carefully and disclose any redefinition.
+5. ONE test read of the picked config. Report train/valid/test + fee ladder.
+   Disclose: universe includes cycle winners selected with hindsight; the
+   defensible number is forward behaviour after this date.
+6. If huggingface.co is also unblocked: fetch FNSPID full_history.zip,
+   rebuild the 07 swing panel with post-2017 data, rerun 41_qulla2.py
+   train/valid/test per its frozen procedure.
+7. Update RESULTS.md files, commit, push, delete the probe Routine.
 - Universe expansion re-tested 2026-07-27 against 7 git-hosted candidates,
   each verified by clone or raw fetch rather than by README claim. Nothing
   reachable carries a bulk daily US-equity panel past 2017:
