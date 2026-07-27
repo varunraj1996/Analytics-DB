@@ -52,8 +52,24 @@ equity-curve-driven 0-4 exposure throttle wired into sizing.
 ## Environment notes (do not re-derive)
 
 - Blocked (org egress policy, do NOT retry): yfinance/Yahoo, Alpaca, Binance,
-  FRED, stooq, figshare, kaggle, all commercial data APIs.
+  FRED, stooq, figshare, kaggle, **huggingface.co** (403 on CONNECT, verified
+  against the proxy status endpoint 2026-07-27), all commercial data APIs.
   Reachable: github clone/raw, gitlab.com, bitbucket.org, pypi.
+- Universe expansion re-tested 2026-07-27 against 7 git-hosted candidates,
+  each verified by clone or raw fetch rather than by README claim. Nothing
+  reachable carries a bulk daily US-equity panel past 2017:
+  * `scienclick/stocks` — the same 7,195-ticker dump already in use, ends
+    2017-11-10. Clonable, but adds nothing.
+  * `Zdong104/FNSPID_Financial_News_Dataset` — **the one that would matter**:
+    4,775 S&P 500 tickers, 1999-2023, daily OHLCV. The GitHub repo holds only
+    two sample tickers; the bulk `full_history.zip` lives on Hugging Face,
+    which is blocked. **If the user fetches this locally, it is the missing
+    input**: a post-2017 window plus (via its news dates) a path to real
+    episodic pivots. `swing/panel.py` ingests per-ticker CSV directly.
+  * `com-480-data-visualization/StocksWise` (11 tickers), `vijinho/sp500`
+    (index series only, ends 2018-12), `AlanWangyl/NASDAQ_...` and
+    `eliangcs/pystock-data` (no data committed / ends 2017),
+    `Finnworlds-.../Historical-Stock-Price-OHLC` (paid-API marketing repo).
 - Panel data: scratchpad `kaggle_huge/` (daily, ends 2017-11).
 - No ANTHROPIC_API_KEY in this sandbox — judge's LLM path activates on the
   user's machine; evals must pass via the deterministic fallback here.
