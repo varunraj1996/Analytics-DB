@@ -47,7 +47,7 @@ pre-declared rule; ONE test run of the frozen configuration.
 - [x] 3. `multiasset/ingest.py`: futures panel (price, carry, USD conversion,
       asset class, point size, spread cost) + snowguru D1 panel. Quality
       report: instruments, spans, gaps.
-- [ ] 4. `multiasset/signals.py` + `multiasset/portfolio.py`: EWMAC
+- [x] 4. `multiasset/signals.py` + `multiasset/portfolio.py`: EWMAC
       (2/8..64/256), Donchian breakout (20..320), annualised carry, skew;
       risk-parity sizing, vol targeting, cost model. Synthetic-data tests for
       the P&L accounting (negative adjusted prices, cost charging, vol target).
@@ -66,7 +66,9 @@ pre-declared rule; ONE test run of the frozen configuration.
 
 ## Current status
 
-Step 3 done: futures panel = 157 instruments / 8 asset classes / 1,014,407
-rows / 1969-12 -> 2024-03 (dropped: unknown-cost, <8y history, micro/mini
-duplicates). sg cross-check panel = 42 instruments / 143,845 rows. Working
-step 4 (signals + portfolio + tests).
+Step 4 done: signals (EWMAC x6, breakout x5, carry, skew; causal expanding
+scaling, cap +/-2), portfolio (currency-space P&L, class-equal risk weights,
+fixed IDM, buffered rebalancing, per-instrument half-spread costs); 6
+synthetic-data accounting tests pass (P&L identity, negative adjusted prices,
+exact cost charging, buffer turnover, vol-target range, sign). Working step 5
+(train sweep).
