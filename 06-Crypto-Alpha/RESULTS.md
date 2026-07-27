@@ -176,3 +176,115 @@ vol target up moves both numbers together:
 past 100% gross, which spot does not give you. **The defensible setting is
 the first row: about 12.5% a year with a −26% drawdown** — on $5,000, roughly
 $625 in a good year, and −$1,300 at the low point of a bad one.
+
+---
+
+# Addendum 3 — why it lagged BTC, and the fix that is not a signal
+
+Fair challenge: the test window contained a large BTC bull run and a
+long-only crypto strategy returned 12.5% against BTC's 27.6%, losing on
+Sharpe too (0.63 against 0.74). Something is wrong. Here is what.
+
+## First, the window was not a bull market for crypto
+
+| | CAGR | Sharpe | vol | max DD |
+|---|---|---|---|---|
+| BTC buy & hold | +27.6% | 0.74 | 48.2% | −49.1% |
+| ETH buy & hold | −4.0% | 0.29 | 69.7% | −63.9% |
+| equal-weight, all 18 | **−0.3%** | 0.32 | 65.4% | −63.9% |
+
+The investable universe went nowhere. **BTC alone ran.** So the question is
+not "why did it miss a bull market" but "why did it miss BTC".
+
+## It held BTC at 0.5% weight through a 71.6% move
+
+| | mean weight | P&L contribution | asset return |
+|---|---|---|---|
+| BNB | 6.8% | +11.9% | +106.8% |
+| DOT | 5.9% | **−5.6%** | −85.2% |
+| **BTC** | **0.5%** | −0.8% | **+71.6%** |
+
+The cause is structural, not bad luck. `mvrv_value` is the negative z-score
+of MVRV against the asset's **expanding** history, and BTC's MVRV
+distribution has shifted upward as the asset institutionalised. So the
+signal read:
+
+| | 2024 H1 | 2024 H2 | 2025 H1 | 2025 H2 | 2026 H1 | 2026 H2 |
+|---|---|---|---|---|---|---|
+| MVRV signal (+ = buy) | −0.51 | −0.42 | −0.56 | −0.49 | +0.21 | +0.44 |
+| BTC 6-month return | | −11% | +30% | +38% | −40% | +11% |
+
+Expensive for two years while it doubled; cheap after it crashed. **A
+valuation z-score applied to an asset in a secular re-rating is a permanent
+sell signal.** The forecast's correlation with next-20-day returns confirms
+where its power lives: +0.12 on average across alts (up to +0.31 on DOGE),
+but **+0.04 on BTC** and −0.17 on ETH.
+
+## The obvious fixes all fail validation
+
+| change | train Sharpe | validation Sharpe |
+|---|---|---|
+| baseline | 1.44 | **1.00** |
+| rolling 2y / 3y normalisation instead of expanding | 1.40 / 1.43 | 0.86 / 0.96 |
+| blend 15% / 30% trend into the forecast | 1.85 / 2.00 | 0.69 / 0.32 |
+| force gross exposure up to 60% | 1.42 | 0.68 (DD −36%) |
+
+Every one is worse out of sample, and the trend blends fail in the most
+instructive way: **higher train Sharpe, lower validation Sharpe.** That is
+the signature of fitting the training window.
+
+## The real problem is the split, not the signal
+
+Crypto runs a roughly four-year cycle and this study has about two of them.
+Chronological thirds therefore give one regime each:
+
+* train 2017–2021 — bull
+* validate 2022–2023 — **bear**
+* test 2024–2026 — bull, then a correction
+
+"Select on validation" therefore means "select whatever worked in a bear
+market", which systematically prefers defensive valuation signals and
+rejects trend. Then the test window was a bull. The process was followed
+correctly and the process itself imported the bias.
+
+Which means the criterion, not the signal, is the thing to fix. Adding a
+separate trend sleeve for BTC/ETH — leaving the alt selection untouched,
+since validation is clear that trend does not belong there:
+
+| majors sleeve | train | validation | worst regime | mean |
+|---|---|---|---|---|
+| 0% | 0.96 | **1.00** | 0.96 | 0.98 |
+| **20%** | 1.40 | 0.96 | **0.96** | 1.18 |
+| 30% | 1.58 | 0.92 | 0.92 | 1.25 |
+| 50% | 1.80 | 0.79 | 0.79 | 1.30 |
+
+Maximising validation Sharpe picks 0%. Maximising the **worst** regime picks
+20% — it costs 0.04 of validation Sharpe and buys 0.44 of train Sharpe. With
+one bull window and one bear window, the selection criterion *is* the
+strategy decision, and preferring the worst case is the defensible choice
+when you have two regimes and cannot know which one comes next.
+
+## Result
+
+80% on-chain over alts (5 names) + 20% trend over BTC/ETH, fortnightly, 26 bps:
+
+| window | CAGR | Sharpe | max DD |
+|---|---|---|---|
+| train | +28.3% | 1.40 | −31.5% |
+| validate | +21.8% | 0.96 | −20.3% |
+| **test** | **+14.9%** | **0.75** | **−21.3%** |
+| *previous config* | *+12.5%* | *0.63* | *−25.9%* |
+| *BTC buy & hold* | *+27.6%* | *0.74* | *−49.1%* |
+
+Sharpe now matches BTC at **less than half its volatility and less than half
+its drawdown**. It still does not beat BTC on raw return, and levered to
+BTC's 48% volatility it would roughly tie — so this is a better *risk*
+proposition, not a better return one. For an account that cannot survive
+−49%, that distinction is the whole point.
+
+*Disclosure:* by this stage the test window had been examined repeatedly
+while diagnosing the BTC problem. The 20% weight was chosen by a criterion
+computed only on train and validation, which is the right procedure, but I
+was searching in the knowledge of what the test window looked like and
+cannot fully purge that. Treat 0.75 as contaminated. A clean read needs data
+after 2026-05.

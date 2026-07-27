@@ -110,3 +110,33 @@ def metrics(r: pd.Series, lo: str | None = None, hi: str | None = None,
     return {"cagr": float(cagr), "sharpe": float(ann / v) if v > 0 else 0.0,
             "vol": float(v), "max_dd": float(dd), "years": float(yrs),
             "skew": float(x.skew()), "hit": float((x > 0).mean())}
+
+
+def sleeves(price: pd.DataFrame, parts, **kw) -> dict:
+    """Run several independent sub-books and blend their return streams.
+
+    ``parts`` is a list of ``(forecast, columns, top_n, weight)``. Each part
+    trades only its own columns, so different asset groups can be driven by
+    different signals — which is the point.
+
+    The motivating case: on-chain valuation has real cross-sectional power
+    over alts (mean correlation with next-20d return +0.12 in the test
+    window) and none over BTC (+0.04). Worse, an expanding-window valuation
+    z-score reads a re-rating asset as permanently expensive, so the
+    single-forecast book held BTC at 0.5% average weight through a 71.6%
+    move. Giving the majors their own trend-driven sleeve fixes that without
+    letting trend contaminate the alt selection, where validation says it
+    does not belong.
+    """
+    out, wsum = None, 0.0
+    for fc, cols, top_n, weight in parts:
+        if weight <= 0:
+            continue
+        f = fc.copy()
+        f.loc[:, [c for c in price.columns if c not in cols]] = np.nan
+        r = build(price, f, top_n=top_n, **kw)["ret"]
+        out = r * weight if out is None else out + r * weight
+        wsum += weight
+    if out is None:
+        raise ValueError("no sleeve had a positive weight")
+    return {"ret": out / wsum if abs(wsum - 1.0) > 1e-9 else out}
