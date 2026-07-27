@@ -404,3 +404,52 @@ Standard disclosure: the test window has been examined repeatedly across
 these three addenda. Every configuration choice was made on train and
 validation, which is the right procedure, but the search itself was informed
 by knowing what test looked like. A clean read needs data after 2026-05.
+
+---
+
+# Addendum 5 — the three routes, tackled one by one
+
+The stale-universe problem from Addendum 4 has three exits. Each was pursued
+to its end state on 2026-07-27:
+
+**Route 1 — allowlist the hosts: tested, blocked, needs the account owner.**
+Verified by direct probe rather than assumption: `api.coingecko.com` and
+`data.binance.vision` both return a 403 CONNECT denial from the egress proxy
+(binance.vision's HEAD response mimics an origin 403; the GET exposes the
+proxy denial). These two plus `huggingface.co` are the allowlist candidates,
+in value order, for the environment's network policy.
+
+**Route 2 — local fetcher: ready.** `scripts/31_fetch_local.py`, validated
+against the ingest schema offline. Run it on any unrestricted machine and
+copy the CSVs in.
+
+**Route 3 — in-session mirror hunt: exhausted, with one real find.** A
+nine-candidate sweep of GitHub/GitLab/Bitbucket (each verified by reading
+file contents, not READMEs) found no multi-asset SOL-era OHLCV. It did find
+one genuine SOL daily OHLCV file (2021-01-01 → 2024-09-29, 1,368 days, no
+gaps). Validation before use: closes match three known landmarks (ATH week,
+post-FTX low, 2024 peak), and implied supply — Coin Metrics market cap
+divided by this file's close — tracks SOL's real circulating supply at
+ratio 1.00 with rolling return correlations of 0.98–1.00 in every year.
+(The full-sample correlation initially read 0.47; that traced to Coin
+Metrics' own market cap being wrong before June 2021, which is why the
+composite drops mktcap before that date.)
+
+## What adding SOL changed: nothing, and that is the honest result
+
+With SOL in the 22-asset panel, the same pre-declared selection grid
+(coverage gate × volume weight, worst-regime rule on train/validation)
+re-picks exactly the previous configuration — `min_signals=4`, 20% volume —
+which excludes SOL, because SOL carries only the three volume-family signals
+and no on-chain data. Test numbers are unchanged: 20.4% CAGR, 1.11, −16.7%.
+
+Sensitivity, reported not selected: relaxing the gate to 3 to admit SOL
+gives test Sharpe 1.02 (worse), and SOL ranks in the top-5 forecast on only
+19% of its 187 live test days. Two structural reasons the impact is small
+regardless: SOL's price series ends 2024-09, covering 9 of the 29 test
+months; and the missing months contain most of its subsequent run, so even
+the flattering case is bounded.
+
+The conclusion of Addendum 4 therefore stands unmodified: the binding
+constraint is the data source, and the fix is route 1 or route 2 — both of
+which sit outside this environment.
