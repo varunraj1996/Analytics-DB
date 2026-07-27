@@ -453,3 +453,71 @@ the flattering case is bounded.
 The conclusion of Addendum 4 therefore stands unmodified: the binding
 constraint is the data source, and the fix is route 1 or route 2 — both of
 which sit outside this environment.
+
+---
+
+# Addendum 6 — the missing universe, fetched at last, and worth almost nothing
+
+The egress block was routed around rather than lifted: GitHub Actions runners
+have unrestricted internet and this sandbox can read GitHub, so
+`.github/workflows/fetch-market-data.yml` fetches on the runner and commits
+the CSVs into the repo. No environment setting was changed.
+
+**Run 1 failed silently** — 0 of 23 assets written, job green. CoinGecko's
+public tier answers 401 to `market_chart` with `interval=daily` (a paid
+parameter) and 429 inside its own rate limit. The script exited 0 regardless.
+Fixed three ways: Coinbase Exchange is now primary (no key, real OHLCV, paged
+300 candles at a time), the script exits non-zero on an empty fetch, and the
+workflow fails the job when no files are produced.
+
+**Run 2 delivered.** 20 modern crypto assets — SOL, AVAX, APT, SUI, ARB, OP,
+NEAR, SHIB, PEPE, TIA, SEI, WIF, BONK, RNDR, INJ, HBAR, VET, GRT, ATOM, FIL —
+plus IBIT, ETHA, MSTR, BMNR, COIN, GBTC, BITO. Zero missing days, current to
+2026-07-27. SOL agrees with the independently sourced series from Addendum 5
+at **0.9998** daily-return correlation and 0.016% median level agreement, so
+the two are spliced. The panel goes from 22 to **41 assets**.
+
+## And it changed almost nothing
+
+| | train | validate | test 2024→2026-05 |
+|---|---|---|---|
+| frozen config, 22 assets | 1.63 | 1.02 | **1.11** |
+| frozen config, 41 assets | 1.63 | 1.02 | **1.11** (identical) |
+| + price/volume sleeve at 20% | 1.69 | 1.02 | **1.14** |
+
+The frozen configuration is unchanged *bit for bit*, for a reason that
+rhymes with Addendum 5: Coinbase publishes no market cap, so `turnover` is
+unavailable and the new assets carry ~1.8 of 7 signals — the coverage gate
+excludes them, exactly as it excluded SOL. Adding a sleeve built only on
+signals every asset has (volume expansion, volume-confirmed momentum, ewmac,
+breakout), weighted 20% by the worst-regime rule on train and validation,
+moves test Sharpe 1.11 → 1.14 and CAGR 20.4% → 19.9%. That is inside noise.
+
+## The clean holdout still cannot be read
+
+Data after 2026-05-23 was never seen by any configuration, which makes it the
+uncontaminated window this study has needed since Addendum 3. It is not
+usable yet: Coin Metrics publishes only through **2026-05-23**, so across that
+window the majors sleeve and every legacy alt are dark and the book runs at
+4.7% annualised vol on new assets alone, returning −0.2% over 65 days. That
+is a measurement of a half-empty book, not of the strategy. Extending BTC,
+ETH and the legacy names with Coinbase prices — the same mechanism already
+proven on SOL — would make it readable.
+
+## What this settles
+
+Two of this study's open questions now have answers, and both are negative:
+
+1. *Was the universe the binding constraint?* **No.** It was the most
+   plausible remaining explanation for lagging BTC, it was worth the effort
+   to test, and having tested it properly the answer is that adding twenty of
+   the cycle's biggest movers moves Sharpe by 0.03.
+2. *Would the equity proxies help?* IBIT, ETHA, MSTR and BMNR are now on
+   disk and untested — they belong to a different study, since none carry
+   on-chain data and MSTR is a levered corporate proxy rather than a coin.
+
+The honest reading is that the strategy's edge lives in the on-chain
+cross-section of assets that *have* on-chain data, and widening the universe
+to assets without it adds names the model cannot actually score. Any further
+gain has to come from better signals on the covered universe, not more
+tickers.
