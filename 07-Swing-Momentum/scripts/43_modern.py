@@ -88,6 +88,18 @@ def trades(ws, mask, lo, hi, stop_adr=1.5):
 
 
 def portfolio(ws, t, tier, lo, hi, risk_frac=0.01, max_pos=10, cost_bps=15.0):
+    """Simulate only the trades that ENTER inside [lo, hi].
+
+    Restricting the trade set to the window is what makes the three windows
+    independent. Running the whole trade list and slicing the equity curve
+    instead lets every window inherit the others' positions, and extending
+    the segment to the last exit of *any* trade runs each window to the end
+    of the panel — which is how train, validate and test came back with the
+    identical -63.19% drawdown and the identical 1,296 fills.
+    """
+    t = t[(t.entry_day >= lo) & (t.entry_day <= hi)].reset_index(drop=True)
+    if len(t) < 30:
+        return None
     mult = np.array([0.0, 1.0, 2.0])[tier[t.entry_day.to_numpy()]]
     order = np.argsort(t.entry_day.to_numpy(), kind="stable").astype(np.int64)
     eq, taken = ST.portfolio(order, t.entry_day.to_numpy().astype(np.int64),
@@ -95,7 +107,8 @@ def portfolio(ws, t, tier, lo, hi, risk_frac=0.01, max_pos=10, cost_bps=15.0):
                              t.risk.to_numpy(), t.pnl.to_numpy(), t.turn.to_numpy(),
                              ws.n_days, 1e6, float(risk_frac), int(max_pos), 0.25,
                              4, float(cost_bps), mult)
-    hi2 = min(ws.n_days - 1, max(hi, int(t.exit_day.max())))
+    # run only to the last exit of trades that entered in this window
+    hi2 = min(ws.n_days - 1, max(int(hi), int(t.exit_day.max())))
     seg = eq[lo:hi2 + 1]
     if seg[0] <= 0 or len(seg) < 60:
         return None
