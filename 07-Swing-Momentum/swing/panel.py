@@ -45,7 +45,19 @@ def build(rebuild: bool = False) -> WS:
         with open(CACHE, "rb") as fh:
             return pickle.load(fh)
 
-    df = pd.read_parquet(PANEL)
+    ws = _assemble(pd.read_parquet(PANEL))
+    with open(CACHE, "wb") as fh:
+        pickle.dump(ws, fh, protocol=4)
+    return ws
+
+
+def _assemble(df: pd.DataFrame) -> WS:
+    """Panel + every feature + breadth, from a long-format OHLCV frame.
+
+    Factored out of ``build`` so the 1999-2017 panel and the modern FNSPID
+    panel go through byte-identical feature code — otherwise a comparison
+    between the two would be measuring the loader, not the market.
+    """
     P = A.Panel(df)
     del df
     s, e, n = P.starts, P.ends, P.n
@@ -87,11 +99,7 @@ def build(rebuild: bool = False) -> WS:
     F["up_streak"] = _streak(up, s, e)
 
     breadth = _breadth(P, F, ret)
-
-    ws = WS(P, F, breadth)
-    with open(CACHE, "wb") as fh:
-        pickle.dump(ws, fh, protocol=4)
-    return ws
+    return WS(P, F, breadth)
 
 
 def _streak(up, starts, ends):
@@ -210,3 +218,46 @@ def double_trouble(ws, ratio=1.8, quiet=0.01):
 
 SETUPS = {"qulla": qulla_breakout, "burst": momentum_burst,
           "ep": episodic_pivot, "dt": double_trouble}
+
+
+# ---------------------------------------------------------------------------
+# the modern panel: FNSPID, 2010-2023, split-repaired
+# ---------------------------------------------------------------------------
+FNSPID_DIR = "/home/user/Analytics-DB/market-data/equity-panel"
+FNSPID_CACHE = os.path.join(SCRATCH, "data", "swing_ws_modern.pkl")
+
+# Splits for the modern panel, declared before any result was looked at and
+# chosen so each window holds a full cycle rather than one regime: train ends
+# before the 2016 recovery, validation spans 2016-2019, and the test window
+# carries the COVID crash, the 2021 melt-up and the 2022 bear together.
+M_TRAIN_END, M_VALID_END = "2015-12-31", "2019-12-31"
+
+
+def build_modern(rebuild: bool = False) -> WS:
+    """The same WS structure, built from the post-2017-capable FNSPID panel.
+
+    Every feature, setup mask and backtest in this package works unchanged on
+    it, so results are directly comparable to the 1999-2017 study — the only
+    thing that differs is the data underneath.
+    """
+    import glob
+
+    if os.path.exists(FNSPID_CACHE) and not rebuild:
+        with open(FNSPID_CACHE, "rb") as fh:
+            return pickle.load(fh)
+
+    from swing.splits import repair_panel
+
+    files = sorted(glob.glob(os.path.join(FNSPID_DIR, "*.parquet")))
+    if not files:
+        raise FileNotFoundError(f"no parquet parts under {FNSPID_DIR}")
+    df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    df["ticker"] = df["ticker"].astype(str)
+    df = repair_panel(df)                      # unadjusted splits are fatal here
+    df = df[["ticker", "date", "open", "high", "low", "close", "volume"]]
+    df = df.dropna().sort_values(["ticker", "date"], ignore_index=True)
+
+    ws = _assemble(df)
+    with open(FNSPID_CACHE, "wb") as fh:
+        pickle.dump(ws, fh, protocol=4)
+    return ws
