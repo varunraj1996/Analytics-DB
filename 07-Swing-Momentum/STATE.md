@@ -15,13 +15,18 @@ and each study gets exactly one frozen test read, disclosed.
    When it lands: write RESULTS.md Addendum 7 with the honest verdict —
    does the pullback entry still beat the chase, does the stack survive
    validation this time. Commit and push.
-2. [ ] ON-CHAIN SIGNAL DEEPENING (06-Crypto-Alpha) — the only lever with a
-   measured positive slope. An inventory agent is ranking unmined Coin
-   Metrics fields. For each surviving candidate: implement causally in
-   `crypto/signals.py` (1-day lag, expanding scale, cap), evaluate SOLO on
-   train and validation, keep only those with positive validation Sharpe
-   contribution, then one blend sweep by worst-regime rule, then ONE test
-   read. Target: beat the current frozen 1.11.
+2. [x] ON-CHAIN SIGNAL DEEPENING (06-Crypto-Alpha) — DONE, see RESULTS.md
+   Addenda 7 and 8. Two outcomes, one of them a correction to our own work:
+   * SIGNAL_LAG was 1 and that was LOOK-AHEAD. AssetEODCompletionTime shows
+     day-T data publishes 24.5-27.1h after T, i.e. after T+1 00:00Z on 100%
+     of days. Fixed to 2; the frozen test Sharpe fell 1.11 -> 0.58. Two
+     regression tests now pin it.
+   * Six candidate signals built and tested solo on train+validation: five
+     fail validation, the survivor is rejected by the blend sweep. The only
+     keeper is a data fix — CapMrktEstUSD as a market-cap fallback, which
+     restores coverage on TRX/BNB/DOT and lifts validation 0.90 -> 1.00.
+   * Book now stands at test Sharpe 0.73, CAGR 14.7%, DD -24.1% (one frozen
+     read), level with BTC's 0.74 at half its drawdown.
 3. [ ] If 1 succeeds, build the swing book's return stream and measure its
    correlation to the crypto book; a third near-uncorrelated stream is worth
    more than either book's own marginal Sharpe.
