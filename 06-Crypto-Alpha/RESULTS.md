@@ -521,3 +521,53 @@ cross-section of assets that *have* on-chain data, and widening the universe
 to assets without it adds names the model cannot actually score. Any further
 gain has to come from better signals on the covered universe, not more
 tickers.
+
+---
+
+# Addendum 7 — correction: the reported test Sharpe contained look-ahead
+
+**The 1.11 test Sharpe in Addendum 6 was wrong. The honest figure is 0.58.**
+
+`SIGNAL_LAG` was 1, meaning a metric stamped for day T could move a position
+at T+1. The dump carries an `AssetEODCompletionTime` column recording when
+each day's data was actually finalised, and it is unambiguous:
+
+| | BTC | ETH | LTC | ADA | XRP | DOGE |
+|---|---|---|---|---|---|---|
+| median publish lag | 27.0h | 27.1h | 26.3h | 24.5h | 24.6h | 25.6h |
+| share landing after T+1 00:00Z | 100% | 100% | 100% | 100% | 100% | 100% |
+
+Day-T data is never available at T+1. Every position the book opened on an
+on-chain signal was trading on a number Coin Metrics had not yet published.
+`SIGNAL_LAG = 2` is the smallest honest value.
+
+The same frozen configuration, re-measured:
+
+| window | CAGR | Sharpe | max DD | | previously reported |
+|---|---|---|---|---|---|
+| train | +31.0% | 1.62 | −31.8% | | 32.4% / 1.63 / −30.5% |
+| validate | +20.2% | 0.90 | −20.6% | | 20.9% / 1.02 / −16.0% |
+| **test** | **+10.5%** | **0.58** | **−25.8%** | | *20.4% / 1.11 / −16.7%* |
+
+Train barely moves (1.63 → 1.62) while test halves (1.11 → 0.58), which is
+itself the signature of the bias: a look-ahead of one day is worth little
+where the signal is strong and everything where it is marginal.
+
+**What this changes.** At 0.58 the book no longer beats BTC's 0.74 on
+risk-adjusted terms — the claim in Addendum 3 that it matched BTC at a third
+of the drawdown does not survive. What survives is the drawdown itself
+(−25.8% against BTC's −49.1%) and the diversification, which were never
+functions of the lag.
+
+Two regression tests now pin this: one asserts `SIGNAL_LAG >= 2` with the
+publication evidence in the failure message, and one perturbs the value
+stamped for day T and requires every weight through T+1 to be unchanged.
+The pre-existing leakage test was weaker — it checked that the *final* bar
+could not change the *final* forecast, a property `SIGNAL_LAG = 1` satisfies
+while still being look-ahead.
+
+**Found by auditing the data rather than the model**, during a survey of
+unused Coin Metrics fields. Every prior number in this file that used
+on-chain signals at lag 1 is optimistic by roughly this margin; the
+volume-only and price-only sleeves are unaffected, since exchange volume is
+published intraday.

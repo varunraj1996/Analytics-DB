@@ -86,3 +86,42 @@ def test_long_only_never_shorts():
     res = book.build(px, fc, spec=config.PortfolioSpec(long_only=True,
                                                        rebalance_buffer=0.0))
     assert (res["weights"] >= -1e-12).all().all()
+
+
+# ---------------------------------------------------------------------------
+# publication timing — the bias that cost half the reported test Sharpe
+# ---------------------------------------------------------------------------
+def test_signal_lag_respects_actual_publication_time():
+    """Coin Metrics finalises day-T data 24.5-27.1h after the T stamp, i.e.
+    always after T+1 00:00Z. A lag of 1 trades on unpublished numbers; it was
+    doing exactly that, and correcting it moved the frozen test Sharpe from
+    1.11 to 0.58. This asserts the lag can never silently go back."""
+    from crypto import config
+    assert config.SIGNAL_LAG >= 2, (
+        "SIGNAL_LAG < 2 is look-ahead: day-T on-chain data is not published "
+        "until after T+1 00:00Z on 100% of observed days"
+    )
+
+
+def test_a_feature_cannot_influence_a_position_before_it_is_published():
+    """End-to-end version: perturbing the value stamped for day T must leave
+    every weight up to and including T+1 untouched."""
+    import numpy as np
+    import pandas as pd
+    from crypto import config, signals as sg
+
+    idx = pd.bdate_range("2021-01-01", periods=300)
+    raw = pd.DataFrame({"A": np.linspace(1.0, 2.0, len(idx))}, index=idx)
+    base = sg.lag(sg._expanding_z(np.log(raw)))
+
+    bumped = raw.copy()
+    t = 250
+    bumped.iloc[t] *= 5.0                      # a wild revision on day T
+    after = sg.lag(sg._expanding_z(np.log(bumped)))
+
+    upto = min(t + config.SIGNAL_LAG - 1, len(idx) - 1)
+    pd.testing.assert_series_equal(base["A"].iloc[:upto + 1],
+                                   after["A"].iloc[:upto + 1])
+    assert not np.allclose(base["A"].iloc[t + config.SIGNAL_LAG],
+                           after["A"].iloc[t + config.SIGNAL_LAG],
+                           equal_nan=True)

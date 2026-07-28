@@ -30,8 +30,15 @@ DEFAULT_HALF_SPREAD_BPS = 10.0
 
 # Signal lag: an on-chain metric stamped for day T is published after T closes,
 # and Coin Metrics revises it.  Every feature is shifted by this many days
-# before it can influence a position.  1 = "act on the next day's open".
-SIGNAL_LAG = 1
+# before it can influence a position.
+#
+# This was 1 ("act on the next day's open") and that was look-ahead. The
+# `AssetEODCompletionTime` column records when each day's data was actually
+# finalised, and across BTC/ETH/LTC/ADA/XRP/DOGE the median lag is 24.5-27.1
+# hours after the T stamp — later than T+1 00:00Z on **100%** of recent days.
+# A position opened at T+1 on a signal stamped T was therefore trading on a
+# number Coin Metrics had not yet published. 2 is the smallest honest value.
+SIGNAL_LAG = 2
 
 FC_CAP = 2.0
 
