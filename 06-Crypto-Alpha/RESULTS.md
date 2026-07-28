@@ -571,3 +571,92 @@ unused Coin Metrics fields. Every prior number in this file that used
 on-chain signals at lag 1 is optimistic by roughly this margin; the
 volume-only and price-only sleeves are unaffected, since exchange volume is
 published intraday.
+
+---
+
+# Addendum 8 — six new signals tested, none kept; the gain came from coverage
+
+Following the correction in Addendum 7, a field audit of the Coin Metrics
+dump asked whether the book was leaving signal on the table. The answer is
+mostly no, and the exception is not a signal.
+
+## What the audit found in the data
+
+The dump is the **community tier: 32 columns**, and the fuller clone adds
+2,217 more assets but *not one extra field*. SOPR, realised profit/loss,
+address balance tiers, coin-days-destroyed and USD fees — three of the four
+literature-backed families worth wanting — **do not exist here at all**.
+Realised cap is the exception: it is exactly reconstructable as
+`CapMrktCurUSD / CapMVRVCur`, since Coin Metrics defines MVRV as that ratio.
+
+## The one change worth keeping is a fallback, not an idea
+
+`CapMrktEstUSD` (free-float market cap) is the **only** market-cap series on
+TRX, and nearly the only one on BNB and DOT — precisely the assets the book
+could never score. Where both series exist they agree exactly (BTC median
+ratio 1.0000), so it is safe as a fallback, and it must be a fallback rather
+than a replacement because it is *shorter* on BTC, ETH and XRP.
+
+| | market-cap coverage before | after |
+|---|---|---|
+| TRX | 0% | 87% |
+| BNB | 20% | 98% |
+| DOT | 31% | 100% |
+
+`turnover` — part of the volume sleeve that drove the earlier gain — now
+computes on all 21 assets instead of 18.
+
+| | train | validate |
+|---|---|---|
+| lag-2 baseline | 1.62 | 0.90 |
+| **+ market-cap fallback** | **1.64** | **1.00** |
+
+## Six candidates, one survivor, and the blend rejects it too
+
+Each built causally at the corrected lag and run **solo** on train and
+validation before anything else:
+
+| candidate | assets | max corr vs existing | train | validate | verdict |
+|---|---|---|---|---|---|
+| fee share of security budget | 9 | 0.20 | 0.95 | **0.55** | survives solo |
+| dilution carry (issuance rate) | 13 | 0.19 | 0.90 | −0.18 | rejected |
+| transfers per tx (batching) | 21 | **0.06** | 0.71 | −0.46 | rejected |
+| realised-cap inflow | 20 | 0.47 | 0.97 | −0.42 | rejected |
+| activation rate (dormancy proxy) | 20 | 0.33 | 0.76 | −0.47 | rejected |
+| free-float trend (unlock overhang) | 18 | 0.09 | 0.49 | −0.16 | rejected |
+
+Every rejected candidate is positive on train and negative on validation —
+the pattern that has been fatal throughout this repository. Notably the
+field audit ranked *dilution carry* first on cross-sectional information
+coefficient; as a tradable long-only sleeve it fails validation outright.
+Rank correlation and Sharpe are not the same test.
+
+Then the blend sweep on the lone survivor:
+
+| fee-share weight | 0% | 10% | 20% | 30% | 40% |
+|---|---|---|---|---|---|
+| validation Sharpe | **1.00** | 0.94 | 0.74 | 0.67 | 0.62 |
+
+Monotonically worse. The pre-declared rule picks **0%** — the signal is real
+enough to stand alone on nine assets, and still dilutes a blend that already
+covers twenty-one.
+
+## Where the book actually stands
+
+| window | CAGR | Sharpe | max DD |
+|---|---|---|---|
+| train | +32.7% | 1.64 | −31.8% |
+| validate | +23.0% | 1.00 | −18.7% |
+| **test (one frozen read)** | **+14.7%** | **0.73** | **−24.1%** |
+
+Against BTC's 0.74 and −49.1% over the same window: level on Sharpe, at half
+the drawdown. That is a weaker claim than Addendum 6's withdrawn 1.11, and
+it is the one that survives honest accounting.
+
+**The pattern across this whole study is now unmistakable.** Every gain has
+come from subtraction — cutting turnover that costs more than it earns,
+refusing to rank assets on inputs that do not exist, correcting a lag that
+traded on unpublished data, restoring coverage on three starved assets.
+Every attempt at addition — machine learning three times, twenty more
+tickers, six new on-chain signals — has failed validation. On this data, the
+remaining edge is in the accounting, not in the ideas.

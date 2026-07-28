@@ -44,8 +44,15 @@ FIELDS = {
     "tx_cnt": "TxCnt",
     "hashrate": "HashRate",
     "mktcap": "CapMrktCurUSD",
+    "mktcap_est": "CapMrktEstUSD",
     "volume": "volume_reported_spot_usd_1d",
     "supply": "SplyCur",
+    # fields the field audit found unused and well covered
+    "iss_ntv": "IssTotNtv",        # native units issued per day
+    "iss_usd": "IssTotUSD",        # same, valued in USD
+    "fee_ntv": "FeeTotNtv",        # total fees paid, native units
+    "tfr_cnt": "TxTfrCnt",         # transfers (a tx can carry many)
+    "addr_bal": "AdrBalCnt",       # addresses holding a non-zero balance
 }
 
 # Coins we will not trade regardless of data presence: stable-ish, wrapped, or
@@ -76,6 +83,18 @@ def build_panel(min_days: int = 500) -> pd.DataFrame:
         d = pd.read_csv(f, usecols=want, parse_dates=["time"])
         d = d.rename(columns={pc: "price", "time": "date"})
         d = d.rename(columns={v: k for k, v in FIELDS.items() if v in d.columns})
+        # Free-float market cap as a fallback for the current-supply series.
+        # They agree exactly where both exist (BTC median Est/Cur = 1.0000)
+        # but cover different assets: CapMrktCurUSD is absent on TRX and
+        # nearly absent on BNB and DOT, which is why those three could not be
+        # scored by any market-cap signal. Fallback, not replacement — the
+        # Est series is shorter on BTC, ETH and XRP.
+        # kept alongside the merged series, not dropped: the ratio of free
+        # float to full market cap is itself a signal (unlock overhang)
+        if "mktcap_est" in d.columns:
+            d["mktcap"] = (d["mktcap"].combine_first(d["mktcap_est"])
+                           if "mktcap" in d.columns else d["mktcap_est"])
+
         d = d.dropna(subset=["price"])
         d = d[d["price"] > 0]
         if len(d) < min_days:

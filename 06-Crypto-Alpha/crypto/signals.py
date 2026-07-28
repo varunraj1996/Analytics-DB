@@ -203,3 +203,84 @@ def coverage_gate(fc: pd.DataFrame, parts: dict, names, min_signals: int):
     navail = sum(parts[s].reindex_like(fc).notna().astype(int)
                  for s in names if s in parts)
     return fc.where(navail >= min_signals)
+
+
+# ---------------------------------------------------------------------------
+# candidates from the field audit — families the original six never touched
+# ---------------------------------------------------------------------------
+def dilution_carry(iss_ntv: pd.DataFrame, supply: pd.DataFrame,
+                   n: int = 30) -> pd.DataFrame:
+    """Negative annualised issuance rate: low-emission chains earn a premium.
+
+    The closest thing to a carry factor available on-chain — holders of a
+    chain printing 8% a year are diluted by 8% a year, and that is a cost
+    the price has to overcome. Slow-moving by construction.
+    """
+    rate = 365.0 * iss_ntv.rolling(n, min_periods=int(n * 0.7)).mean() / supply
+    return lag(-_expanding_z(np.log(rate.where(rate > 0))))
+
+
+def fee_share_security_budget(fee_ntv: pd.DataFrame, iss_ntv: pd.DataFrame,
+                              n: int = 30) -> pd.DataFrame:
+    """Fees as a share of miner revenue: blockspace demand without price.
+
+    Both terms are in native units, so the ratio never touches market cap or
+    price — which is what makes it orthogonal to every valuation signal in
+    the book. A rising share means users are bidding for blockspace rather
+    than the chain paying for its own security by printing.
+    """
+    share = fee_ntv / (fee_ntv + iss_ntv).replace(0.0, np.nan)
+    return lag(_expanding_z(np.log(share.where(share > 0)
+                                   .ewm(span=n, min_periods=n // 2).mean())))
+
+
+def freefloat_trend(mktcap_est: pd.DataFrame, mktcap: pd.DataFrame,
+                    n: int = 30) -> pd.DataFrame:
+    """Negative drift in free float vs full market cap: unlock overhang.
+
+    A rising ratio means locked or vesting supply is reaching the market —
+    persistent sell pressure that is invisible to price-based signals and to
+    valuation ratios alike.
+    """
+    ff = (mktcap_est / mktcap.replace(0.0, np.nan))
+    lf = np.log(ff.where(ff > 0))
+    return lag(-_expanding_scale(lf - lf.shift(n)))
+
+
+def transfers_per_tx(tfr_cnt: pd.DataFrame, tx_cnt: pd.DataFrame,
+                     n: int = 30) -> pd.DataFrame:
+    """Batching intensity: transfers packed per transaction.
+
+    Exchanges and custodians batch withdrawals; retail does not. Rising
+    batching is a proxy for institutional and exchange flow dominating the
+    chain's activity mix.
+    """
+    b = (tfr_cnt / tx_cnt.replace(0.0, np.nan))
+    lb = np.log(b.where(b > 0))
+    return lag(_expanding_scale(lb - lb.shift(n)))
+
+
+def realized_cap_inflow(mktcap: pd.DataFrame, mvrv: pd.DataFrame,
+                        n: int = 30) -> pd.DataFrame:
+    """Growth in realised cap — net capital entering at a fresh cost basis.
+
+    Realised cap is not published directly but is exactly reconstructable,
+    since Coin Metrics defines MVRV as market cap over realised cap. Unlike
+    the MVRV *level* (a slow valuation tilt) its growth rate is fast.
+    """
+    rc = mktcap / mvrv.replace(0.0, np.nan)
+    lr = np.log(rc.where(rc > 0))
+    return lag(_expanding_scale(lr - lr.shift(n)))
+
+
+def activation_rate(addr_act: pd.DataFrame, addr_bal: pd.DataFrame,
+                    n: int = 30) -> pd.DataFrame:
+    """Share of the holder base transacting — the only dormancy proxy here.
+
+    Coin-days-destroyed and SOPR are absent from this tier, so the fraction
+    of funded addresses that move on a given day is the nearest available
+    read on whether long-term holders are waking up.
+    """
+    a = (addr_act / addr_bal.replace(0.0, np.nan))
+    return lag(_expanding_z(np.log(a.where(a > 0)
+                                   .ewm(span=n, min_periods=n // 2).mean())))
