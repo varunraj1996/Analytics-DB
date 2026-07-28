@@ -7,14 +7,21 @@ Work these in order. Never peek at a test window during development; every
 selection happens on train+validation by the pre-declared worst-regime rule,
 and each study gets exactly one frozen test read, disclosed.
 
-1. [ ] MODERN SWING RE-TEST — `scripts/43_modern.py` running now, log at
-   `<scratch>/modern_ablation.log`, marker `<scratch>/modern_done`.
-   NOTE a wrapper bug already wasted 3h: a wait-loop whose own command string
-   contained the pgrep pattern matched itself and spun forever. Use marker
-   files, never self-matching pgrep.
-   When it lands: write RESULTS.md Addendum 7 with the honest verdict —
-   does the pullback entry still beat the chase, does the stack survive
-   validation this time. Commit and push.
+1. [x] MODERN SWING RE-TEST — DONE, see RESULTS.md Addendum 4. Negative and
+   decisive: the +103 bps pullback-vs-chase effect does not replicate; every
+   layer is significantly negative on train and validation; portfolio train
+   Sharpe 0.12, validation -1.29. Rejected at the first gate of the
+   pre-declared rule. Caveat recorded: FNSPID is large-cap, only 17% of rows
+   clear the ADR>=4% filter, so his small-cap universe stays untested.
+   Process lessons, all of which cost real time tonight:
+   * never put a pgrep/pkill pattern in a command that also names the target
+     file — it matches the issuing shell and kills it (hit 3x).
+   * a stray `coverage.py` in the scratchpad shadowed the real module and
+     broke numba's import, since scripts run from there put it on sys.path.
+     Renamed to field_coverage_audit.py. Do not name scratch files after
+     stdlib/site-packages modules.
+   * mask computation is cached at `<scratch>/modern_masks.pkl`; the
+     portfolio-only pass (`<scratch>/port_only.py`) takes minutes, not 35.
 2. [x] ON-CHAIN SIGNAL DEEPENING (06-Crypto-Alpha) — DONE, see RESULTS.md
    Addenda 7 and 8. Two outcomes, one of them a correction to our own work:
    * SIGNAL_LAG was 1 and that was LOOK-AHEAD. AssetEODCompletionTime shows
@@ -27,11 +34,22 @@ and each study gets exactly one frozen test read, disclosed.
      restores coverage on TRX/BNB/DOT and lifts validation 0.90 -> 1.00.
    * Book now stands at test Sharpe 0.73, CAGR 14.7%, DD -24.1% (one frozen
      read), level with BTC's 0.74 at half its drawdown.
-3. [ ] If 1 succeeds, build the swing book's return stream and measure its
-   correlation to the crypto book; a third near-uncorrelated stream is worth
-   more than either book's own marginal Sharpe.
-4. [ ] Keep `agent/` evals green (`python3 -m pytest tests -q`) after any
-   change to shared code.
+3. [x] MOOT — item 1 failed, so there is no swing return stream worth
+   combining. Correlating a book with train Sharpe 0.12 and validation -1.29
+   into the crypto book would import a loss for the sake of diversification.
+   Revisit only if a small-cap panel with delistings ever becomes reachable.
+4. [x] Agent suite green after all changes: 37 tests, 39 eval cases, 100%
+   verdict accuracy, zero false clears.
+
+## AGENDA COMPLETE 2026-07-28. Standing position of the programme:
+  * 05-Multi-Asset futures — the one validated winner (Sharpe ~1.0 after the
+    disclosed structural fixes). Untouched tonight, per the user.
+  * 06-Crypto-Alpha — test Sharpe 0.73 after correcting a look-ahead that had
+    inflated it to 1.11; level with BTC at half the drawdown.
+  * 07-Swing-Momentum — dead on modern data. Machinery and compliance agent
+    are the deliverables, not the strategy.
+  Next real lever, if the user wants one: portfolio construction across the
+  futures and crypto books, which needs a common untouched window.
 
 Do NOT touch 05-Multi-Asset: the user explicitly said to leave futures out.
 
