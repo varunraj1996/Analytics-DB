@@ -65,7 +65,14 @@ COINS = {
     "wif": "dogwifcoin", "bonk": "bonk",
 }
 
-EQUITIES = ["IBIT", "ETHA", "MSTR", "BMNR", "COIN", "GBTC", "BITO"]
+EQUITIES = ["IBIT", "ETHA", "MSTR", "BMNR", "COIN", "GBTC", "BITO",
+            # the leverage study: index ETFs and their 2x/3x versions, which
+            # are how a small cash account buys volatility without margin.
+            # TQQQ/QLD/SSO/UPRO trade from 2010 or earlier, so they span the
+            # 2018 shock, the COVID crash and the 2022 bear as REAL
+            # instruments — fee drag, financing cost and all — rather than
+            # as a synthetic 3x that flatters the backtest.
+            "QQQ", "SPY", "TQQQ", "QLD", "SSO", "UPRO", "SQQQ"]
 
 
 def fetch_json(url: str, tries: int = 4):
