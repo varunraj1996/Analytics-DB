@@ -1,5 +1,36 @@
 # 07-Swing-Momentum — task state (self-resumption source of truth)
 
+## OVERNIGHT AGENDA 2026-07-28 (user: "keep working through the night,
+## pick the task up again when limits are restored")
+
+Work these in order. Never peek at a test window during development; every
+selection happens on train+validation by the pre-declared worst-regime rule,
+and each study gets exactly one frozen test read, disclosed.
+
+1. [ ] MODERN SWING RE-TEST — `scripts/43_modern.py` running now, log at
+   `<scratch>/modern_ablation.log`, marker `<scratch>/modern_done`.
+   NOTE a wrapper bug already wasted 3h: a wait-loop whose own command string
+   contained the pgrep pattern matched itself and spun forever. Use marker
+   files, never self-matching pgrep.
+   When it lands: write RESULTS.md Addendum 7 with the honest verdict —
+   does the pullback entry still beat the chase, does the stack survive
+   validation this time. Commit and push.
+2. [ ] ON-CHAIN SIGNAL DEEPENING (06-Crypto-Alpha) — the only lever with a
+   measured positive slope. An inventory agent is ranking unmined Coin
+   Metrics fields. For each surviving candidate: implement causally in
+   `crypto/signals.py` (1-day lag, expanding scale, cap), evaluate SOLO on
+   train and validation, keep only those with positive validation Sharpe
+   contribution, then one blend sweep by worst-regime rule, then ONE test
+   read. Target: beat the current frozen 1.11.
+3. [ ] If 1 succeeds, build the swing book's return stream and measure its
+   correlation to the crypto book; a third near-uncorrelated stream is worth
+   more than either book's own marginal Sharpe.
+4. [ ] Keep `agent/` evals green (`python3 -m pytest tests -q`) after any
+   change to shared code.
+
+Do NOT touch 05-Multi-Asset: the user explicitly said to leave futures out.
+
+
 Purpose: if the session is cut off by usage limits, resume from here.
 Delete this section's Routine (list_triggers → delete_trigger) when DONE.
 
