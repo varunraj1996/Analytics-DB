@@ -1,2 +1,2 @@
 Touch this file to request a market-data fetch.
-requested: 2026-07-28 run 3 (leverage study: QQQ SPY TQQQ QLD SSO UPRO SQQQ)
+requested: 2026-07-28 run 4 (retry after non-fast-forward race; rebase-before-push added)

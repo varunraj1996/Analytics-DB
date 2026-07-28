@@ -91,5 +91,9 @@ jobs:
             exit 1
           else
             git commit -m "Refresh market data (automated fetch)"
+            # the branch may have advanced while the fetch ran (run 3 lost
+            # its data to exactly this race) — rebase our data commit onto
+            # the current tip before pushing
+            git pull --rebase origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
           fi
