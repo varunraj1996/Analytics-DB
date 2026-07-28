@@ -339,3 +339,75 @@ per-trade expectancy is negative, concentration multiplies the loss and adds
 variance. It is never a fix for an edge that is not there — which is the
 whole reason the concentration question has to be answered with a test
 rather than an argument.
+
+---
+
+# Addendum 4 — the modern re-test: the strategy is dead, and this buries it
+
+Every result above was measured on a survivorship-biased panel of stocks
+still listed in November 2017. The `market-data/equity-panel` fetch finally
+removed that excuse: **2,897 liquid tickers, 8,025,509 rows, 2010 → 2023,
+split-repaired**, containing the 2018 volatility shock, the COVID crash, the
+2021 melt-up and the 2022 bear — none of which the original study could see.
+Same code, same setups, splits declared before any result was inspected:
+train ≤2015, validate 2016-2019, test 2020-2023.
+
+## The one large effect does not replicate
+
+10-day excess over the same-day universe:
+
+| layer | train ≤2015 | validate 2016-19 | test 2020-23 |
+|---|---|---|---|
+| chase (first pass) | −275 bps (t −7.5) | −373 (t −8.0) | −55 (t −4.3) |
+| pullback entry | −165 (t −4.4) | **−511** (t −5.8) | +197 (t 1.7) |
+| + RS top decile | −140 (t −3.3) | **−535** (t −5.3) | +356 (t 1.8) |
+| + sector leadership | −213 (t −2.9) | −508 (t −3.6) | +467 (t 1.3) |
+
+The Addendum-2 headline — the pullback entry worth **+103 bps per 10 days**
+over chasing, the single largest effect in this directory — was an artifact
+of the biased panel. Here the pullback beats the chase on train and test but
+is *worse* in validation, and every layer is significantly negative in the
+two windows where selection happens.
+
+## The portfolio, with independent windows
+
+| | CAGR | Sharpe | max DD | fills |
+|---|---|---|---|---|
+| train ≤2015 | +0.8% | 0.12 | −16.0% | 320 |
+| validate 2016-19 | **−14.1%** | **−1.29** | −50.2% | 488 |
+| test 2020-23 | +12.1% | 0.35 | −63.2% | 488 |
+
+*(regime gate off: train −0.28, validate −1.66, test 0.35 — the gate reduces
+damage without creating edge, exactly as the original study found.)*
+
+Under the pre-declared rule — worst-regime Sharpe, train ≥ 0.5 — this fails
+at the first gate. It would never be selected, and the positive test window
+is precisely the trap: t-statistics there never exceed 1.8 while the
+train/validation negatives run to t = −8.
+
+## Two honest caveats, both cutting the same way
+
+**A bug of mine nearly hid this.** The first portfolio run returned an
+identical −63.19% drawdown and 1,296 fills for all three windows, which is
+impossible. Each window was inheriting the others' open positions and
+running to the end of the panel. Fixed; the numbers above are from
+independent windows.
+
+**The universe is not his.** FNSPID is S&P 500 constituents. Only **17%** of
+eligible rows clear Kullamägi's own ADR ≥ 4% filter and the median name has
+**2.33%** ADR — he trades high-volatility small caps. So this is a fair test
+of the setups on large caps and *not* a test of his actual universe.
+
+## Verdict
+
+Across four independent implementations — daily chase, 10-minute intraday
+ORH, daily pullback with RS/sector/regime, and now the same stack on clean
+modern data — the setups have never produced a validated edge net of costs.
+The remaining defence is that the strategy needs small caps with high ADR,
+and that is now the *only* untested claim. It requires a small-cap panel
+with delistings, which no reachable source provides.
+
+What this directory ends with is not a strategy but the machinery: a
+faithful implementation, honest controls, and a compliance agent that
+enforces the rules on 1,049 of its own trades. Those outlive the negative
+result.
